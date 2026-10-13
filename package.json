@@ -1,0 +1,14 @@
+{
+  "name": "meshway-workspace",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Open source peer networking, native clients, and browser tools",
+  "workspaces": ["apps/web", "apps/extension", "packages/cli"],
+  "scripts": {
+    "dev": "npm run dev --workspace @meshway/web",
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "engines": { "node": ">=22" }
+}

@@ -1,0 +1,19 @@
+services:
+  meshway:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    restart: unless-stopped
+    command: ["daemon", "--config", "/var/lib/meshway/config.json"]
+    volumes:
+      - meshway-state:/var/lib/meshway
+    ports:
+      - "4001:4001/tcp"
+      - "4001:4001/udp"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    read_only: true
+    tmpfs: [/tmp]
+volumes:
+  meshway-state:

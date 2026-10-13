@@ -1,0 +1,19 @@
+{
+  "state_dir": "/var/lib/meshway/server",
+  "listen_addresses": ["/ip4/0.0.0.0/tcp/4001", "/ip4/0.0.0.0/udp/4001/quic-v1"],
+  "bootstrap_peers": [],
+  "upstream_peer": "",
+  "socks_listen": "",
+  "api_listen": "127.0.0.1:7777",
+  "api_token": "REPLACE_BY_RUNNING_meshway_init_FOR_RANDOM_TOKEN",
+  "allowed_origins": [],
+  "relay": true,
+  "exit": false,
+  "allow_private_targets": false,
+  "allowed_peers": [],
+  "forwards": [],
+  "services": [{"name": "example-web", "target": "127.0.0.1:8080"}],
+  "account_sync": false,
+  "advertise": true,
+  "server_label": "My private gateway"
+}

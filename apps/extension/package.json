@@ -1,0 +1,8 @@
+{
+  "name": "@meshway/extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": { "build": "tsc --noEmit && node build.mjs", "typecheck": "tsc --noEmit", "test": "tsx --test src/*.test.ts" },
+  "devDependencies": { "@types/chrome": "^0.0.299", "@types/node": "^22.0.0", "esbuild": "^0.25.0", "tsx": "^4.19.0", "typescript": "^5.7.0" }
+}

@@ -1,0 +1,26 @@
+[Unit]
+Description=Meshway encrypted peer network
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=meshway
+Group=meshway
+StateDirectory=meshway
+WorkingDirectory=/var/lib/meshway
+ExecStart=/usr/local/bin/meshway daemon --config /var/lib/meshway/config.json
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/meshway
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+CapabilityBoundingSet=
+AmbientCapabilities=
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

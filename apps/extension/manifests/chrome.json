@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "Meshway — Local Browser Proxy",
+  "version": "0.1.0",
+  "description": "Opt in to route browser TCP traffic through your local Meshway SOCKS5 daemon. This is a browser proxy, not a device-wide VPN.",
+  "permissions": ["proxy", "storage"],
+  "background": { "service_worker": "background.js" },
+  "action": { "default_popup": "popup.html", "default_title": "Meshway browser proxy", "default_icon": { "16": "icon16.png", "32": "icon32.png" } },
+  "icons": { "16": "icon16.png", "48": "icon48.png", "128": "icon128.png" },
+  "content_security_policy": { "extension_pages": "script-src 'self'; object-src 'none'" }
+}

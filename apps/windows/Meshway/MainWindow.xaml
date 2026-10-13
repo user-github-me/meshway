@@ -1,0 +1,67 @@
+<Window x:Class="Meshway.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="Meshway" Width="920" Height="820" MinWidth="720" MinHeight="640" Background="#F5F7FA" Closing="OnClosing">
+  <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <StackPanel Margin="28">
+      <TextBlock Text="Meshway" FontSize="32" FontWeight="Bold" />
+      <TextBlock Text="Your open peer network" Foreground="#586575" Margin="0,4,0,20" />
+      <TextBlock x:Name="StateText" Text="Daemon offline" FontSize="18" FontWeight="SemiBold" />
+      <TextBlock x:Name="MessageText" Text="Add a bootstrap peer or connect an address to join your network." TextWrapping="Wrap" Margin="0,8,0,12" />
+      <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+        <Button x:Name="StartButton" Content="Start" Click="StartClicked" Padding="18,8" Margin="0,0,8,0" />
+        <Button x:Name="StopButton" Content="Stop" Click="StopClicked" Padding="18,8" Margin="0,0,8,0" IsEnabled="False" />
+        <Button Content="Refresh" Click="RefreshClicked" Padding="18,8" />
+      </StackPanel>
+      <TextBox x:Name="StatusText" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Consolas" MinHeight="110" Margin="0,0,0,20" />
+      <GroupBox Header="Servers" Padding="12" Margin="0,0,0,18">
+        <StackPanel>
+          <TextBlock x:Name="CatalogMessage" Text="Start Meshway to see available servers." Foreground="#586575" TextWrapping="Wrap" Margin="0,0,0,12" />
+          <Button Content="Disconnect" Click="DisconnectClicked" HorizontalAlignment="Left" Padding="14,7" Margin="0,0,0,12" />
+          <StackPanel x:Name="ServerList" />
+        </StackPanel>
+      </GroupBox>
+      <GroupBox Header="Add a server invitation" Padding="12" Margin="0,0,0,18">
+        <StackPanel>
+          <TextBox x:Name="ConnectAddress" ToolTip="Paste the invitation address from a server owner" Margin="0,0,0,8" />
+          <Button Content="Add server" Click="ConnectClicked" HorizontalAlignment="Left" Padding="18,7" />
+          <TextBlock Text="The owner needs to approve this device before you can use its exit or tunnels." Foreground="#586575" TextWrapping="Wrap" Margin="0,8,0,0" />
+        </StackPanel>
+      </GroupBox>
+      <Expander x:Name="SettingsGroup" Header="Advanced node settings · apply on next start" Padding="12">
+        <StackPanel>
+          <TextBlock Text="Daemon executable" />
+          <DockPanel Margin="0,4,0,12"><Button DockPanel.Dock="Right" Content="Choose…" Click="ChooseClicked" Margin="8,0,0,0" Padding="12,3" /><TextBox x:Name="ExecutablePath" /></DockPanel>
+          <TextBlock Text="State directory" /><TextBox x:Name="StateDirectory" Margin="0,4,0,12" />
+          <TextBlock Text="SOCKS listener (empty disables)" /><TextBox x:Name="SocksListen" Margin="0,4,0,12" />
+          <TextBlock Text="Loopback API listener" /><TextBox x:Name="ApiListen" Margin="0,4,0,12" />
+          <TextBlock Text="Local API token" /><PasswordBox x:Name="ApiToken" Margin="0,4,0,12" />
+          <TextBlock Text="Upstream exit peer ID (optional)" /><TextBox x:Name="UpstreamPeer" Margin="0,4,0,12" />
+          <TextBlock Text="Bootstrap multiaddresses · one per line" /><TextBox x:Name="BootstrapPeers" AcceptsReturn="True" MinHeight="65" Margin="0,4,0,12" />
+          <TextBlock Text="Allowed inbound peer IDs · one per line" /><TextBox x:Name="AllowedPeers" AcceptsReturn="True" MinHeight="55" Margin="0,4,0,8" />
+          <TextBlock Text="An empty allowlist denies inbound tunnels and exit requests. Add trusted peer IDs before sharing access." TextWrapping="Wrap" Foreground="#586575" Margin="0,0,0,14" />
+          <CheckBox x:Name="RelayRole" Content="Serve encrypted relay traffic" Margin="0,0,0,10" />
+          <CheckBox x:Name="PersonalServer" Content="Use as your private server" Checked="PersonalServerChanged" Unchecked="PersonalServerChanged" Margin="0,0,0,8" />
+          <TextBlock Text="Your private server accepts devices enrolled with the same recovery key. Save your recovery file, then import it on your own server. Keep it private." TextWrapping="Wrap" Foreground="#586575" Margin="0,0,0,12" />
+          <CheckBox x:Name="ExitRole" Content="Serve as an internet exit" Checked="ExitChanged" Unchecked="ExitChanged" Margin="0,0,0,8" />
+          <TextBlock Text="Exit traffic uses your public IP address and bandwidth. Enable only if you intend to forward peers' internet traffic." TextWrapping="Wrap" Foreground="#586575" Margin="0,0,0,12" />
+          <CheckBox x:Name="PrivateTargets" Content="Allow exits to reach private / LAN destinations" IsEnabled="False" Margin="0,0,0,14" />
+          <Button Content="Save settings" Click="SaveClicked" HorizontalAlignment="Left" Padding="18,7" />
+        </StackPanel>
+      </Expander>
+      <GroupBox Header="Local account and devices" Padding="12" Margin="0,18,0,0">
+        <StackPanel>
+          <TextBlock Text="Your recovery key identifies your account. Devices have separate peer identities. History stays local unless account sync is enabled and requested." TextWrapping="Wrap" Foreground="#586575" Margin="0,0,0,12" />
+          <Button Content="Refresh account" Click="AccountClicked" HorizontalAlignment="Left" Padding="14,7" />
+          <TextBox x:Name="AccountText" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="110" MaxHeight="300" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" Margin="0,12,0,12" />
+          <TextBlock Text="Account peer ID for optional sync" /><TextBox x:Name="AccountSyncPeer" Margin="0,4,0,8" />
+          <Button Content="Sync with peer" Click="AccountSyncClicked" HorizontalAlignment="Left" Padding="14,7" />
+          <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+            <Button Content="Save recovery key…" Click="ExportRecoveryClicked" Padding="14,7" Margin="0,0,8,0" />
+            <Button Content="Import recovery key…" Click="ImportRecoveryClicked" Padding="14,7" />
+          </StackPanel>
+          <TextBlock Text="Stop Meshway before saving or importing. Anyone with this recovery file can enroll devices in your account. Keep the backup private." TextWrapping="Wrap" Foreground="#586575" Margin="0,10,0,0" />
+        </StackPanel>
+      </GroupBox>
+      <Button Content="Open configuration folder" Click="OpenFolderClicked" HorizontalAlignment="Left" Margin="0,16,0,12" />
+      <TextBlock Text="Encrypted SOCKS and TCP tunnels are available through the Go daemon. Device-wide Windows VPN requires a future packet driver integration." TextWrapping="Wrap" Foreground="#586575" />
+    </StackPanel>
+  </ScrollViewer>
+</Window>

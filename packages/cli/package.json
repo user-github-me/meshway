@@ -1,0 +1,11 @@
+{
+  "name": "@meshway/cli",
+  "version": "0.1.0",
+  "description": "Cross-platform launcher and verified binary installer for Meshway",
+  "type": "module",
+  "license": "Apache-2.0",
+  "bin": { "meshway": "bin/meshway.js" },
+  "files": ["bin", "src", "README.md", "LICENSE"],
+  "scripts": { "test": "node --test", "check": "node --check bin/meshway.js && node --check src/installer.js" },
+  "engines": { "node": ">=22" }
+}

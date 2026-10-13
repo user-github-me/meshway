@@ -1,0 +1,14 @@
+.git
+.tools
+node_modules
+release
+apps
+coverage
+.meshway
+**/.build
+**/bin
+**/obj
+!dist/
+dist/*
+!dist/bin/
+!dist/bin/meshway-linux-*

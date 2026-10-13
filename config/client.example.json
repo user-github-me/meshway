@@ -1,0 +1,18 @@
+{
+  "state_dir": "/var/lib/meshway/client",
+  "listen_addresses": ["/ip4/0.0.0.0/tcp/4001", "/ip4/0.0.0.0/udp/4001/quic-v1"],
+  "bootstrap_peers": [],
+  "upstream_peer": "",
+  "socks_listen": "127.0.0.1:1080",
+  "api_listen": "127.0.0.1:7777",
+  "api_token": "REPLACE_BY_RUNNING_meshway_init_FOR_RANDOM_TOKEN",
+  "allowed_origins": ["http://localhost:5173", "http://127.0.0.1:5173"],
+  "relay": false,
+  "exit": false,
+  "allow_private_targets": false,
+  "allowed_peers": [],
+  "forwards": [],
+  "services": [],
+  "account_sync": false,
+  "advertise": false
+}
