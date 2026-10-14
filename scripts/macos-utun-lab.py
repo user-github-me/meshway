@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Actual utun routing lab restricted to a disposable GitHub-hosted macOS VM."""
-import argparse, datetime, hashlib, ipaddress, json, os, pathlib, platform, shutil, signal, subprocess, sys, time, urllib.request
+import argparse, datetime, hashlib, ipaddress, json, os, pathlib, platform, re, shutil, signal, subprocess, sys, time, urllib.request
 
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 STATE=ROOT/'.tools/macos-utun-lab'
@@ -23,6 +23,20 @@ def guard():
 
 
 def canonical(path):return pathlib.Path(path).resolve()
+
+
+def safe_helper_failure(path):
+    """Keep only the bounded CLI error line, never a private log/config dump."""
+    if not path.is_file():return None
+    with path.open('rb') as stream:
+        stream.seek(max(0,path.stat().st_size-8192));tail=stream.read(8192).decode('utf8','replace')
+    for line in reversed(tail.splitlines()):
+        if line.startswith('meshway: '):
+            line=re.sub(r'Bearer\s+\S+','Bearer [redacted]',line,flags=re.I)
+            line=re.sub(r'\b[0-9a-fA-F]{32,}\b','[redacted]',line)
+            line=re.sub(r'\b(?:api[_ -]?token|recovery[_ -]?key|private[_ -]?key|device[_ -]?key|session[_ -]?id)\s*[:=]\s*\S+',r'[private value redacted]',line,flags=re.I)
+            return line[:768]
+    return None
 
 def prepare(args):
     guard()
@@ -65,7 +79,7 @@ def execute(args):
     CONFIG.write_text(json.dumps(c)+'\n');CONFIG.chmod(0o600)
     private_log=open(STATE/'daemon.private.log','wb');os.chmod(STATE/'daemon.private.log',0o600)
     daemon=subprocess.Popen([str(BINARY),'daemon','--config',str(CONFIG)],stdout=private_log,stderr=private_log)
-    helper=None;owner=None
+    helper=None;owner=None;helper_log=None;phase='exit-authorization'
     proof={'date':datetime.datetime.now(datetime.timezone.utc).isoformat(),'runner':'disposable GitHub-hosted macOS','version':run([BINARY,'version']).stdout.strip(),'binary_sha256':hashlib.sha256(BINARY.read_bytes()).hexdigest(),'development_host_mutated':False,'checks':{},'cycles':[]}
     before=baseline()
     def api(path,body=None):
@@ -99,6 +113,7 @@ def execute(args):
         else:raise RuntimeError('Exit did not authorize the printed ephemeral peer within the bounded wait.')
         proof['checks']['approved_remote_exit_socks_baseline']=True
         for mode in ['explicit-stop','owner-process-exit','helper-sigkill-explicit-recovery']:
+            phase=mode+':helper-setup'
             owner=subprocess.Popen([sys.executable,'-c','import time;time.sleep(180)'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
             helper_log=open(STATE/(mode+'.helper.private.log'),'wb');os.chmod(helper_log.name,0o600)
             helper=subprocess.Popen(['/usr/bin/sudo','-n',str(BINARY),'vpn','start','--config',str(canonical(CONFIG)),'--peer',args.exit_peer,'--underlay-ips',exit_ip,'--parent-pid',str(owner.pid)],stdout=helper_log,stderr=helper_log)
@@ -111,19 +126,33 @@ def execute(args):
                     if current.get('active'):ready=True;device=current.get('device');break
                 except ValueError:pass
                 time.sleep(.25)
-            if not ready:raise RuntimeError('Actual utun helper did not confirm setup; private helper diagnostics retained.')
+            if not ready:
+                proof['helper_diagnostic']={'phase':phase,'exit_code':helper.poll(),'last_cli_error':safe_helper_failure(pathlib.Path(helper_log.name))}
+                raise RuntimeError('Actual utun helper did not confirm setup; bounded CLI diagnostic recorded.')
             cycle={'mode':mode,'utun_active':True}
+            phase=mode+':ipv4-route'
             route=run(['/sbin/route','-n','get','1.1.1.1']).stdout
-            if f'interface: {device}' not in route:raise RuntimeError('IPv4 kernel capture route did not select the owned utun.')
+            if f'interface: {device}' not in route:
+                observed=re.search(r'(?m)^\s*interface:\s*([A-Za-z0-9]+)\s*$',route)
+                proof['route_mismatch']={'family':'ipv4','expected_interface':device,'observed_interface':observed.group(1) if observed else None}
+                raise RuntimeError('IPv4 kernel capture route did not select the owned utun.')
             cycle['ipv4_kernel_capture_route']=True
+            phase=mode+':ipv6-route'
             route6=run(['/sbin/route','-n','get','-inet6','2606:4700:4700::1111']).stdout
-            if f'interface: {device}' not in route6:raise RuntimeError('IPv6 kernel capture route did not select the owned utun.')
+            if f'interface: {device}' not in route6:
+                observed=re.search(r'(?m)^\s*interface:\s*([A-Za-z0-9]+)\s*$',route6)
+                proof['route_mismatch']={'family':'ipv6','expected_interface':device,'observed_interface':observed.group(1) if observed else None}
+                raise RuntimeError('IPv6 kernel capture route did not select the owned utun.')
             cycle['ipv6_kernel_capture_route']=True
+            phase=mode+':resolver-presence'
             dns=run(['/usr/sbin/scutil','--dns']).stdout
-            if '10.77.0.1' not in dns:raise RuntimeError('Virtual DNS resolver not present in actual macOS configuration.')
+            if '10.77.0.1' not in dns:
+                proof['resolver_mismatch']={'expected_virtual_resolver_present':False}
+                raise RuntimeError('Virtual DNS resolver not present in actual macOS configuration.')
             cycle['virtual_dns_resolver_present']=True
             traffic_before=api('/v1/status')
             import uuid
+            phase=mode+':native-dns'
             probe_hostname='meshway-'+uuid.uuid4().hex+'.example.com'
             # Run the native resolver in a bounded child; a fresh NXDOMAIN
             # proves DNS packets crossed the interface without a cached name.
@@ -133,12 +162,15 @@ def execute(args):
             cycle['native_dns_lookup']=True
             cycle['native_dns_generated_meshway_packet_traffic']=traffic_after_dns.get('bytes_sent',0)>traffic_before.get('bytes_sent',0) and traffic_after_dns.get('bytes_received',0)>traffic_before.get('bytes_received',0)
             if not cycle['native_dns_generated_meshway_packet_traffic']:raise RuntimeError('Native DNS did not produce observed encrypted packet traffic.')
+            phase=mode+':kernel-ip-tls'
             ip_result=curl('https://api.ipify.org?format=json')
             if ip_result.returncode or json.loads(ip_result.stdout).get('ip')!=exit_ip:raise RuntimeError('Native kernel TCP/TLS exit IP mismatch.')
             cycle['kernel_tcp_tls_expected_exit_ip']=True
+            phase=mode+':kernel-public-https'
             https=curl('https://example.com/')
             if https.returncode or ('Example Domain' not in https.stdout and 'documentation examples' not in https.stdout):raise RuntimeError('Kernel capture certificate-verified public HTTPS failed.')
             cycle['kernel_public_https']=True
+            phase=mode+':owned-cleanup'
             if mode=='owner-process-exit':
                 owner.terminate();owner.wait(timeout=5)
                 try:helper.wait(timeout=105)
@@ -163,10 +195,13 @@ def execute(args):
         proof['ipv6_internet_limitation']='Actual IPv6 kernel capture route verified; public IPv6 egress requires a separately dual-stack exit and is not asserted here.'
         proof['crash_limitation']='SIGKILL recovery invokes explicit privileged Stop; no persistent crash firewall kill switch is claimed.'
     except Exception as error:
-        proof['status']='FAIL';proof['error']=str(error)
+        proof['status']='FAIL';proof['phase']=phase;proof['error']=str(error)[:768]
+        if helper_log and 'helper_diagnostic' not in proof:
+            proof['helper_diagnostic']={'phase':phase,'exit_code':helper.poll() if helper else None,'last_cli_error':safe_helper_failure(pathlib.Path(helper_log.name))}
     finally:
         try:stop_helper()
         except Exception:proof['cleanup_error']='Privileged cleanup failed; inspect private runner diagnostics.'
+        if helper_log and not helper_log.closed:helper_log.close()
         if daemon.poll() is None:
             try:api('/v1/shutdown',{})
             except Exception:daemon.terminate()
