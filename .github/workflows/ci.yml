@@ -1,9 +1,13 @@
 name: checks
 on:
   push:
+    branches: [main]
   pull_request:
 permissions:
   contents: read
+concurrency:
+  group: checks-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   core:
     runs-on: ubuntu-latest

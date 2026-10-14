@@ -1,9 +1,13 @@
 name: contribution-policy
 on:
   push:
+    branches: [main]
   pull_request:
 permissions:
   contents: read
+concurrency:
+  group: policy-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   formatting:
     runs-on: ubuntu-latest
