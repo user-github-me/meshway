@@ -76,6 +76,20 @@ try:
  after_server=api(server,'/v1/status');proof['server_packet_counters']={'sent_delta':after_server['bytes_sent']-before_server['bytes_sent'],'received_delta':after_server['bytes_received']-before_server['bytes_received']}
  proof['mock_dns_queries_received']=int(dns_counter.read_text()) if dns_counter.exists() else 0
  if not proof['checks']['full_helper_unbound_udp_dns_reply']:raise RuntimeError('full helper UDP DNS has no reply')
+ concurrent=[]
+ def dns_probe(family,index):
+  sock=socket.socket(family,socket.SOCK_DGRAM);sock.settimeout(6)
+  ident=20000+index;query=struct.pack('!HHHHHH',ident,256,1,0,0,0)+b'\x07example\x03com\x00'+struct.pack('!HH',1,1)
+  try:
+   sock.sendto(query,('10.77.0.1' if family==socket.AF_INET else 'fd77::1',53));answer,_=sock.recvfrom(1500);concurrent.append({'family':4 if family==socket.AF_INET else 6,'reply':len(answer)>=12 and struct.unpack('!H',answer[:2])[0]==ident})
+  except OSError:concurrent.append({'family':4 if family==socket.AF_INET else 6,'reply':False})
+  finally:sock.close()
+ workers=[threading.Thread(target=dns_probe,args=(socket.AF_INET if i%2==0 else socket.AF_INET6,i)) for i in range(12)]
+ for worker in workers:worker.start()
+ for worker in workers:worker.join(timeout=8)
+ proof['concurrent_dns']=concurrent
+ proof['checks']['concurrent_ipv4_ipv6_dns_replies']=len(concurrent)==12 and all(item['reply'] for item in concurrent)
+ if not proof['checks']['concurrent_ipv4_ipv6_dns_replies']:raise RuntimeError('concurrent IPv4/IPv6 virtual DNS reply failed')
  native_before=api(client,'/v1/status')
  p=lab.run([sys.executable,'-c','import socket,sys\ntry:socket.getaddrinfo(sys.argv[1],443)\nexcept socket.gaierror:pass','meshway-'+uuid.uuid4().hex+'.example.com'],timeout=20,check=False)
  native_after=api(client,'/v1/status')
