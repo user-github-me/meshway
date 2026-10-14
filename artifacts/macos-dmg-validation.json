@@ -1,13 +1,57 @@
 {
   "status": "PASS",
-  "artifact": ".tools/release/installers/Meshway-macos.dmg",
-  "bytes": 51974324,
-  "sha256": "44906c56da9dc42a0d0889d39941016f443b89f2938dc54cca60db58ea6c5439",
+  "artifact": "Meshway-macos.dmg",
+  "bytes": 53082787,
+  "sha256": "5117203cee5257f668671389fba890c07fe6902e008439c7cffa2fb5383a2b83",
   "mounted_app_exact_hashes": true,
+  "sealed_app_files": {
+    "Contents/Info.plist": {
+      "sha256": "e7e0a13c42bbb8f8c36d0c699f226b82b5a058badf9823542408e47e4971a122",
+      "size": 1677
+    },
+    "Contents/MacOS/Meshway": {
+      "sha256": "1cba4804ff12bcb817035d68ac40a27e40774e41d35da583b15bff27653bd3d9",
+      "size": 4891776
+    },
+    "Contents/PkgInfo": {
+      "sha256": "82502191c9484b04d685374f9879a0066069c49b8acae7a04b01d38d07e8eca0",
+      "size": 8
+    },
+    "Contents/PlugIns/MeshwayPacketTunnel.appex/Contents/Info.plist": {
+      "sha256": "22c2e34cf965dc83fec275dd51d91625c75fcafdf3a10713a6eca75eb2bc7c02",
+      "size": 1640
+    },
+    "Contents/PlugIns/MeshwayPacketTunnel.appex/Contents/MacOS/MeshwayPacketTunnel": {
+      "sha256": "fc7bf41f798c6d17105aa120e681126bb649471614e1c40f446341e847280d26",
+      "size": 65398768
+    },
+    "Contents/PlugIns/MeshwayPacketTunnel.appex/Contents/_CodeSignature/CodeResources": {
+      "sha256": "6686de10a28a2fe11b36cbb86dcbacc827cfc4ea116b4dabf1845e5aee629e9b",
+      "size": 2200
+    },
+    "Contents/Resources/Meshway.icns": {
+      "sha256": "332ca29fa3dfda14c6bed84905de1ccb5600a06dd657f84f56f335466c9b5509",
+      "size": 112279
+    },
+    "Contents/Resources/meshway": {
+      "sha256": "8fe239f844b218100d681d6fa0da227875e111eb7344e82b40683e9f35103f1c",
+      "size": 59650768
+    },
+    "Contents/_CodeSignature/CodeResources": {
+      "sha256": "34e46c192246f0a77ab128a35466c16dbb41d88c9410fbd86c2d1a9f7940b26a",
+      "size": 2957
+    }
+  },
   "universal_gui_and_daemon": true,
+  "administrator_vpn_qualified_marker": true,
   "applications_shortcut": true,
   "license_notices": true,
   "host_network_modified": false,
-  "limitation": "Unsigned experimental app; legitimate Apple signing/Network Extension provisioning and physical VPN runtime remain required.",
-  "mount_and_temporary_files_removed": true
+  "limitation": "Experimental ad-hoc-signed app without Apple notarization. Administrator VPN passed disposable hosted kernel/public internet and cleanup tests; physical sleep/wake and persistent crash containment remain separate. Apple Network Extension requires legitimate signing and entitlements.",
+  "mount_and_temporary_files_removed": true,
+  "runtime_source_commit": "7bb531fd62c180fc712537b38e94fec66e8c1c2c",
+  "bundle_source_commit": "080c1a27e286ca95acd41b521b6c0618e71f8e4d",
+  "swift_tests_passed": 49,
+  "universal_xcode_build": true,
+  "deep_strict_ad_hoc_signature_verified": true
 }

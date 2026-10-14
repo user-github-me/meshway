@@ -111,5 +111,38 @@
     "fresh_brave_default_proxy_checks_scope": "Current OS proxy and authenticated daemon path passed; app binary/process correlation must be rechecked after removing the older duplicate bundle.",
     "gui_process_path_correlated": false
   },
-  "final_build_live_gui_replacement": "Pending old duplicate app proxy restoration; prior default-proxy browser checks remain valid for the recorded daemon."
+  "final_build_live_gui_replacement": "Pending old duplicate app proxy restoration; prior default-proxy browser checks remain valid for the recorded daemon.",
+  "final_sealed_core_validation": {
+    "status": "PASS",
+    "scope": "exact signed universal macOS bundle core via isolated SOCKS client; live GUI replacement remains separate",
+    "core_sha256": "8fe239f844b218100d681d6fa0da227875e111eb7344e82b40683e9f35103f1c",
+    "browser_cycles": [
+      {
+        "cycle": 0,
+        "passed": true,
+        "checks": {
+          "expected_exit_ip": true,
+          "dual_stack_exit_ip": true,
+          "browser_https": true,
+          "temporary_browser_closed": true,
+          "host_network_baseline_preserved": true
+        }
+      },
+      {
+        "cycle": 1,
+        "passed": true,
+        "checks": {
+          "expected_exit_ip": true,
+          "dual_stack_exit_ip": true,
+          "browser_https": true,
+          "temporary_browser_closed": true,
+          "host_network_baseline_preserved": true
+        }
+      }
+    ],
+    "owned_ssh_restart_tls_exit_ip": true,
+    "test_daemon_stopped": true,
+    "temporary_account_state_removed": true,
+    "host_network_modified": false
+  }
 }

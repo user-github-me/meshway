@@ -47,7 +47,7 @@ def main():
             for name in ('LICENSE','THIRD_PARTY_NOTICES.txt'):
                 if (mount/name).read_bytes()!=(ROOT/name).read_bytes():raise RuntimeError('Notice differs')
             artifact=str(a.output.relative_to(ROOT)) if a.output.is_relative_to(ROOT) else str(a.output)
-            result={'status':'PASS','artifact':artifact,'bytes':a.output.stat().st_size,'sha256':hashlib.sha256(a.output.read_bytes()).hexdigest(),'mounted_app_exact_hashes':True,'universal_gui_and_daemon':True,'administrator_vpn_qualified_marker':qualified,'applications_shortcut':True,'license_notices':True,'host_network_modified':False,'limitation':'Experimental ad-hoc-signed app without Apple notarization. Administrator VPN passed disposable hosted kernel/public internet and cleanup tests; physical sleep/wake and persistent crash containment remain separate. Apple Network Extension requires legitimate signing and entitlements.'}
+            result={'status':'PASS','artifact':artifact,'bytes':a.output.stat().st_size,'sha256':hashlib.sha256(a.output.read_bytes()).hexdigest(),'mounted_app_exact_hashes':True,'sealed_app_files':expected,'universal_gui_and_daemon':True,'administrator_vpn_qualified_marker':qualified,'applications_shortcut':True,'license_notices':True,'host_network_modified':False,'limitation':'Experimental ad-hoc-signed app without Apple notarization. Administrator VPN passed disposable hosted kernel/public internet and cleanup tests; physical sleep/wake and persistent crash containment remain separate. Apple Network Extension requires legitimate signing and entitlements.'}
         finally:
             if devices:run(['/usr/bin/hdiutil','detach',devices[0]])
     result['mount_and_temporary_files_removed']=True
