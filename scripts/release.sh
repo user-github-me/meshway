@@ -71,6 +71,12 @@ if app.is_dir() and __import__('sys').platform=='darwin':
 ios=Path('dist/apple-ios/Build/Products/Release-iphoneos/Meshway.app')
 if ios.is_dir() and __import__('sys').platform=='darwin':
     subprocess.run(['ditto','-c','-k','--keepParent',str(ios),str(release/'Meshway-ios-unsigned.zip')],check=True)
+    import tempfile, shutil
+    with tempfile.TemporaryDirectory(prefix='meshway-ipa-') as staging:
+        payload=Path(staging)/'Payload'/'Meshway.app'
+        shutil.copytree(ios,payload,symlinks=True)
+        if Path('THIRD_PARTY_NOTICES.txt').is_file(): shutil.copy2('THIRD_PARTY_NOTICES.txt',payload/'THIRD_PARTY_NOTICES.txt')
+        subprocess.run(['ditto','-c','-k',staging,str(release/'Meshway-ios-unsigned.ipa')],check=True)
 for browser in ('chrome','firefox'):
     extension=Path('apps/extension/dist')/browser
     if not extension.is_dir(): continue

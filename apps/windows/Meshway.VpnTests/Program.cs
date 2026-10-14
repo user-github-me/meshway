@@ -27,15 +27,11 @@ Console.WriteLine("Windows VPN route/firewall plan: IPv4+IPv6 coverage, peer byp
 
 var controls = new[] { "203.0.113.5", "255.255.255.255/32", "fe80::/10", "ff02::/16" };
 var controlRanges = FirewallAddressRanges.Complement(controls, false).Concat(FirewallAddressRanges.Complement(controls, true)).ToArray();
-bool RangeContains(string range, IPAddress address)
-{
-    var pair = range.Split('-').Select(IPAddress.Parse).ToArray();
-    if (pair[0].AddressFamily != address.AddressFamily) return false;
-    var number = new System.Numerics.BigInteger(address.GetAddressBytes(), true, true);
-    return number >= new System.Numerics.BigInteger(pair[0].GetAddressBytes(), true, true) && number <= new System.Numerics.BigInteger(pair[1].GetAddressBytes(), true, true);
-}
+Check(controlRanges.All(value => value.Contains('/') && !value.Contains('-')), "Windows control blocks must use valid CIDR notation.");
+var exactCIDRs = FirewallAddressRanges.Complement(allowed.Select(x => x.ToString()).ToArray(), false).Concat(FirewallAddressRanges.Complement(allowed.Select(x => x.ToString()).ToArray(), true)).ToArray();
+Check(exactCIDRs.SequenceEqual(complement), "Control and original endpoint complements must produce identical canonical CIDRs.");
 foreach (var address in new[] { "203.0.113.5", "255.255.255.255", "fe80::1", "febf:ffff::1", "ff02::1:2" })
-    Check(!controlRanges.Any(range => RangeContains(range, IPAddress.Parse(address))), "Required link control must remain outside its DHCP/NDP block ranges.");
+    Check(!controlRanges.Any(range => VPNPlan.Contains(range, IPAddress.Parse(address))), "Required link control must remain outside its DHCP/NDP block ranges.");
 foreach (var address in new[] { "1.1.1.1", "203.0.113.4", "203.0.113.6", "255.255.255.254", "fe7f:ffff::1", "fec0::1", "ff01::1", "ff03::1", "2001:db8::1" })
-    Check(controlRanges.Count(range => RangeContains(range, IPAddress.Parse(address))) == 1, "Control exceptions must not permit adjacent or ordinary remote destinations: " + address);
-Console.WriteLine("Windows control-destination ranges: DHCP broadcast/exact server and IPv6 link-local/multicast scope boundaries passed.");
+    Check(controlRanges.Count(range => VPNPlan.Contains(range, IPAddress.Parse(address))) == 1, "Control exceptions must not permit adjacent or ordinary remote destinations: " + address);
+Console.WriteLine("Windows control-destination CIDRs: DHCP broadcast/exact server and IPv6 link-local/multicast scope boundaries passed.");

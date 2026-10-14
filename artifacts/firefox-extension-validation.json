@@ -1,0 +1,156 @@
+{
+  "schema": 1,
+  "started_at": "2026-10-14T02:58:46.432Z",
+  "status": "passed",
+  "platform": {
+    "os": "darwin",
+    "arch": "arm64",
+    "node": "v24.20.0"
+  },
+  "source_commit": "266d6342dcf691c46c205b36a2c75ea52eefff75",
+  "browser": {
+    "executable_sha256": "e75d92f6f3210c9c31056d10b912f43c139f0cf7a2a3d0f2e002e88c1c7fbf5a",
+    "version": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0"
+  },
+  "extension": {
+    "id": "meshway-local-proxy@meshway.local",
+    "version": "0.1.0",
+    "files_sha256": {
+      "background.js": "1e25c03bb1efe02d9eef692c91f1c5e4ed9178dada2f0f78a2a703b1de07882f",
+      "icon128.png": "0d3be2d1d0a839db1e61945d0b27e4df5565db4865b37340caeeb1fd2075c3ac",
+      "icon16.png": "5108c14c5a06d4bf5f6d5f8f17a200ef6ca82ad353838dcef052f48adc139bd2",
+      "icon32.png": "dcceb5c287bef1886d243d1659053c0cda4165966f411c8c5f6c7956b867f315",
+      "icon48.png": "01a5837eb659e2d91d76bb83fb8f0b1be796d89f0898e3510b64fca38cce772f",
+      "manifest.json": "8d558a165c4eec1b1c71fefe0dab2e17405cdadc5d6f94d58215f3b7d7536709",
+      "popup.css": "c5ca3b7afab775b078adb8d21385bfe4f53b94c64fd4fb44fba17b1cffd4c950",
+      "popup.html": "988c3bf0aa10c10addcdaf2faf7fab2b6f0357d6dfca0c3982a139fc8efb1a47",
+      "popup.js": "aa1e0d6e9501ac3ac7cdf2bf76324b3745ba8d18de7d89a52ad06fbc9185762a"
+    },
+    "temporary_install": true,
+    "firefox_warnings": []
+  },
+  "method": "Real headless Firefox; native RDP temporary addon and popup DOM; actual browser proxy API and loopback TCP traffic.",
+  "bounds": [
+    "The packaged popup is opened as an extension tab and its actual buttons/checkbox are operated through native RDP.",
+    "The SOCKS fixtures forward only reserved test destinations to an owned loopback HTTP origin; this is browser proxy validation, not a Meshway peer-core or public internet test.",
+    "Private-window permission is granted only to this addon in the disposable profile with the same ExtensionPermissions.add operation used by about:addons.",
+    "Firefox signing/store installation, physical field use, device routes, system DNS and system proxy are outside this test."
+  ],
+  "private_permission_gate": {
+    "allowed": false,
+    "error": "proxy.settings requires private browsing permission.",
+    "settings_unchanged": true,
+    "recovery_removed": true
+  },
+  "private_permission_granted": true,
+  "consent": {
+    "popup_rejected": true,
+    "background_rejected": true,
+    "settings_unchanged": true
+  },
+  "proxy": {
+    "before": {
+      "levelOfControl": "controllable_by_this_extension",
+      "value": {
+        "proxyType": "manual",
+        "autoConfigUrl": "",
+        "autoLogin": false,
+        "proxyDNS": false,
+        "httpProxyAll": false,
+        "socksVersion": 5,
+        "passthrough": "localhost, 127.0.0.1, ::1, preserved.invalid",
+        "http": "",
+        "ssl": "",
+        "socks": "127.0.0.1:55228"
+      }
+    },
+    "enabled": {
+      "levelOfControl": "controlled_by_this_extension",
+      "value": {
+        "proxyType": "manual",
+        "autoConfigUrl": "",
+        "autoLogin": false,
+        "proxyDNS": true,
+        "httpProxyAll": false,
+        "socksVersion": 5,
+        "passthrough": "localhost, 127.0.0.1, ::1",
+        "http": "",
+        "ssl": "",
+        "socks": "127.0.0.1:55229"
+      }
+    },
+    "after": {
+      "levelOfControl": "controllable_by_this_extension",
+      "value": {
+        "proxyType": "manual",
+        "autoConfigUrl": "",
+        "autoLogin": false,
+        "proxyDNS": false,
+        "httpProxyAll": false,
+        "socksVersion": 5,
+        "passthrough": "localhost, 127.0.0.1, ::1, preserved.invalid",
+        "http": "",
+        "ssl": "",
+        "socks": "127.0.0.1:55228"
+      }
+    },
+    "exact_restoration": true,
+    "recovery_removed": true
+  },
+  "traffic": {
+    "socks_requests": [
+      {
+        "fixture": "previous-browser-proxy",
+        "socks_version": 5,
+        "command": "CONNECT",
+        "address_type": "IPv4",
+        "host": "192.0.2.1",
+        "port": 80
+      },
+      {
+        "fixture": "meshway-browser-proxy",
+        "socks_version": 5,
+        "command": "CONNECT",
+        "address_type": "domain",
+        "host": "meshway-firefox.invalid",
+        "port": 80
+      },
+      {
+        "fixture": "previous-browser-proxy",
+        "socks_version": 5,
+        "command": "CONNECT",
+        "address_type": "IPv4",
+        "host": "192.0.2.1",
+        "port": 80
+      }
+    ],
+    "origin_requests": [
+      {
+        "path": "/before",
+        "host": "192.0.2.1"
+      },
+      {
+        "path": "/proxied",
+        "host": "meshway-firefox.invalid"
+      },
+      {
+        "path": "/bypass",
+        "host": "127.0.0.1:55227"
+      },
+      {
+        "path": "/after",
+        "host": "192.0.2.1"
+      }
+    ],
+    "domain_dns_through_socks": true,
+    "loopback_bypass": true,
+    "restored_proxy_used": true
+  },
+  "cleanup": {
+    "browser_closed": true,
+    "profiles_deleted": true,
+    "loopback_listeners_stopped": true,
+    "host_routes_dns_system_proxy_changes": false
+  },
+  "finished_at": "2026-10-14T02:58:49.473Z"
+}

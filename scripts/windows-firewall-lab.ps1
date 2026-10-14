@@ -16,6 +16,9 @@ New-Item -ItemType Directory -Path $directory | Out-Null
 $binary = Join-Path (Resolve-Path $Package).Path 'meshway-firewall-test.exe'
 $groups = @(); $child = $null; $adapter = $null
 $previousFixtureDirectory = $env:MESHWAY_WINDOWS_FIREWALL_LAB_DIR
+$evidence = Join-Path $root 'artifacts/windows-firewall-debug'
+New-Item -ItemType Directory -Force -Path $evidence | Out-Null
+$script:probeResults = @()
 function Assert-Lab([bool]$condition,[string]$message) { if (!$condition) { throw $message } }
 function Invoke-PacketProbe([int]$family,[bool]$peer,[bool]$expected) {
     $response = Join-Path $directory 'response.json'
@@ -30,6 +33,8 @@ function Invoke-PacketProbe([int]$family,[bool]$peer,[bool]$expected) {
         Start-Sleep -Milliseconds 50
     }
     $result = Get-Content -LiteralPath $response -Raw | ConvertFrom-Json
+    $script:probeResults += @{ family=$family; peer=$peer; expected=$expected; observed=$result.observed; write_error=$result.write_error }
+    $script:probeResults | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $evidence 'kernel-probes.json')
     Assert-Lab ($result.observed -eq $expected) "Unexpected IPv$family kernel UDP result (peer=$peer, expected=$expected)."
 }
 function Invoke-ProductionFirewall($plan,[bool]$expectSuccess) {
@@ -52,11 +57,39 @@ Add-MeshwayFirewall -Plan $plan -Adapter $adapter
     $process=[Diagnostics.Process]::Start($start)
     $stdout=$process.StandardOutput.ReadToEndAsync(); $stderr=$process.StandardError.ReadToEndAsync()
     $watch=[Diagnostics.Stopwatch]::StartNew()
-    if (!$process.WaitForExit(45000)) { $process.Kill($true); throw 'Production firewall creation exceeded the helper timeout.' }
-    $errorText=$stderr.GetAwaiter().GetResult(); $null=$stdout.GetAwaiter().GetResult()
+    $completed=$process.WaitForExit(45000)
+    if (!$completed) { $process.Kill($true); $process.WaitForExit(5000) | Out-Null }
+    $errorText=$stderr.GetAwaiter().GetResult(); $outputText=$stdout.GetAwaiter().GetResult()
+    $attempt=if ($expectSuccess) {'valid'} else {'invalid'}
+    $errorText | Set-Content -LiteralPath (Join-Path $evidence "$attempt-error.log")
+    $outputText | Set-Content -LiteralPath (Join-Path $evidence "$attempt-output.log")
+    Copy-Item -LiteralPath $inputPath -Destination (Join-Path $evidence "$attempt-plan.json")
+    if (!$completed) { throw 'Production firewall creation exceeded the helper timeout.' }
     if ($expectSuccess -and $process.ExitCode -ne 0) { throw "Production firewall creation failed: $errorText" }
     if (!$expectSuccess -and $process.ExitCode -eq 0) { throw 'Malformed firewall prefix unexpectedly succeeded.' }
     return $watch.Elapsed.TotalSeconds
+}
+function Get-ProductionComplement([string[]]$endpoints) {
+    # Use the same C# source and PowerShell compiler as the production helper.
+    # NetSecurity rejects several address-range spellings; the production
+    # complement returns the exact CIDR representation used for the app.
+    $run=Join-Path $directory 'complement.ps1'
+    $endpointsPath=Join-Path $directory 'endpoints.json'
+    $resultPath=Join-Path $directory 'blocked.json'
+    $endpoints | ConvertTo-Json | Set-Content -LiteralPath $endpointsPath -Encoding UTF8
+    @'
+param([string]$SourcePath,[string]$EndpointsPath,[string]$ResultPath)
+$ErrorActionPreference='Stop'
+Add-Type -TypeDefinition (Get-Content -LiteralPath $SourcePath -Raw) -ReferencedAssemblies @('System.dll','System.Core.dll','System.Numerics.dll')
+$allowed=[string[]](Get-Content -LiteralPath $EndpointsPath -Raw | ConvertFrom-Json)
+$blocked=@([Meshway.VPN.FirewallAddressRanges]::Complement($allowed,$false)) + @([Meshway.VPN.FirewallAddressRanges]::Complement($allowed,$true))
+$blocked | ConvertTo-Json | Set-Content -LiteralPath $ResultPath -Encoding UTF8
+'@ | Set-Content -LiteralPath $run -Encoding UTF8
+    & (Join-Path $env:SystemRoot 'System32/WindowsPowerShell/v1.0/powershell.exe') -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $run -SourcePath (Join-Path $root 'apps/windows/Meshway.VpnHelper/FirewallAddressRanges.cs') -EndpointsPath $endpointsPath -ResultPath $resultPath
+    if ($LASTEXITCODE -ne 0) { throw 'Production complement generation failed.' }
+    $blocked=@(Get-Content -LiteralPath $resultPath -Raw | ConvertFrom-Json)
+    Assert-Lab ($blocked.Count -gt 100 -and @($blocked | Where-Object { !($_.Contains('/')) -or $_.Contains('-') }).Count -eq 0) 'Production complement did not return full IPv4/IPv6 CIDR coverage.'
+    return $blocked
 }
 try {
     & go test -c -o $binary ./internal/vpn
@@ -75,12 +108,15 @@ try {
     # Prove the actual kernel can emit packets before applying its scoped rules.
     Invoke-PacketProbe 4 $false $true; Invoke-PacketProbe 6 $false $true
     $group='Meshway-' + [Guid]::NewGuid().ToString('N'); $groups += $group
-    $plan=@{ id=$group; range_source=(Get-Content -LiteralPath (Join-Path $root 'apps/windows/Meshway.VpnHelper/FirewallAddressRanges.cs') -Raw); Endpoints=@('10.74.0.12','fd74::12'); blocked=@('0.0.0.0-10.74.0.11','10.74.0.13-255.255.255.255','::-fd74::11','fd74::13-ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff') }
+    $endpoints=@('10.74.0.12','fd74::12')
+    $blocked=Get-ProductionComplement $endpoints
+    $plan=@{ id=$group; range_source=(Get-Content -LiteralPath (Join-Path $root 'apps/windows/Meshway.VpnHelper/FirewallAddressRanges.cs') -Raw); Endpoints=$endpoints; blocked=$blocked }
     $creationSeconds=Invoke-ProductionFirewall $plan $true
     $rules=@(Get-NetFirewallRule -Group $group -ErrorAction Stop)
     Assert-Lab ($rules.Count -ge 260) 'Required protocol/transport firewall rules are missing.'
     Assert-Lab (@($rules | Where-Object { $_.Action -ne 'Block' -or $_.Direction -ne 'Outbound' -or $_.Enabled -ne 'True' }).Count -eq 0) 'Firewall rules are not enabled outbound blocks.'
     $interfaces=@($rules | Get-NetFirewallInterfaceFilter)
+    $interfaces | Select-Object InstanceID,InterfaceAlias | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $evidence 'interface-filters.json')
     Assert-Lab (@($interfaces | Where-Object { @($_.InterfaceAlias).Count -ne 1 -or $_.InterfaceAlias -ne $name }).Count -eq 0) 'Firewall rules escaped the owned disposable adapter.'
     $raw=@($rules | Where-Object { $_.DisplayName -like '*-protocol-*' })
     Assert-Lab ($raw.Count -eq 253) 'Raw IP protocol coverage is incomplete.'
@@ -92,6 +128,7 @@ try {
         Assert-Lab ($null -ne $filter -and $actual.Protocol -eq $number) "Raw protocol $number did not create its actual Windows filter."
     }
     $transport=@($rules | Where-Object { $_.DisplayName -like '*-transport-*' } | Get-NetFirewallPortFilter)
+    $transport | Select-Object InstanceID,Protocol,LocalPort,RemotePort,IcmpType | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $evidence 'transport-filters.json')
     Assert-Lab (@($transport | Where-Object { "$($_.Protocol)" -in @('TCP','6') }).Count -gt 0) 'TCP blocking filters missing.'
     $udp=@($transport | Where-Object { "$($_.Protocol)" -in @('UDP','17') })
     Assert-Lab (@($udp | Where-Object { '68' -in $_.LocalPort -and '67' -in $_.RemotePort }).Count -gt 0) 'Scoped DHCPv4 blocking complement missing.'
@@ -130,6 +167,9 @@ try {
     if ($child -and !$child.HasExited) { New-Item -ItemType File -Force -Path (Join-Path $directory 'stop') -ErrorAction SilentlyContinue | Out-Null; if (!$child.WaitForExit(10000)) { $child.Kill($true) } }
     if (Test-Path -LiteralPath (Join-Path $directory 'fixture.log')) { Get-Content -LiteralPath (Join-Path $directory 'fixture.log') }
     if (Test-Path -LiteralPath (Join-Path $directory 'fixture-error.log')) { Get-Content -LiteralPath (Join-Path $directory 'fixture-error.log') }
+    foreach ($file in @('fixture.log','fixture-error.log','blocked.json','apply.ps1','complement.ps1')) { if (Test-Path -LiteralPath (Join-Path $directory $file)) { Copy-Item -LiteralPath (Join-Path $directory $file) -Destination (Join-Path $evidence $file) -Force } }
+    Copy-Item -LiteralPath (Join-Path $root 'apps/windows/Meshway.VpnHelper/firewall.ps1') -Destination (Join-Path $evidence 'production-firewall.ps1') -Force
+    Copy-Item -LiteralPath (Join-Path $root 'apps/windows/Meshway.VpnHelper/FirewallAddressRanges.cs') -Destination (Join-Path $evidence 'production-address-ranges.cs') -Force
     if ($previousFixtureDirectory) { $env:MESHWAY_WINDOWS_FIREWALL_LAB_DIR=$previousFixtureDirectory } else { Remove-Item Env:MESHWAY_WINDOWS_FIREWALL_LAB_DIR -ErrorAction SilentlyContinue }
     Remove-Item -LiteralPath $binary -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $directory -Recurse -Force -ErrorAction SilentlyContinue

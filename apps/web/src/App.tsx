@@ -78,6 +78,7 @@ function Downloads() {
   const base = 'https://github.com/user-github-me/meshway/releases/download/v0.1.0-alpha.1/';
   const files = [
     ['Android', 'meshway-android-debug.apk', 'Debug APK · testing'],
+    ['iPhone / iPad', 'Meshway-ios-unsigned.ipa', 'Developer IPA · Apple signing required'],
     ['macOS', 'Meshway-macos.zip', 'Unsigned · VPN signing required'],
     ['Windows', 'Meshway-win-x64.zip', '64-bit · unsigned app'],
     ['Windows ARM', 'Meshway-win-arm64.zip', 'ARM64 · unsigned app'],

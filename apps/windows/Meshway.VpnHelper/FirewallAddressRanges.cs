@@ -8,7 +8,7 @@ using System.Numerics;
 namespace Meshway.VPN
 {
     // Compatible with the Windows PowerShell 5.1 Add-Type compiler as well as
-    // the native helper. Return disjoint ranges excluding exact control scopes.
+    // the native helper. Return disjoint CIDRs excluding exact control scopes.
     public static class FirewallAddressRanges
     {
         private sealed class Span { public BigInteger First; public BigInteger Last; }
@@ -32,11 +32,28 @@ namespace Meshway.VPN
             BigInteger maximum = BigInteger.Pow(2, bits) - 1;
             foreach (Span span in spans.OrderBy(x => x.First))
             {
-                if (span.First > cursor) result.Add(Address(cursor, bits) + "-" + Address(span.First - 1, bits));
+                if (span.First > cursor) AppendPrefixes(result, cursor, span.First - 1, bits);
                 cursor = BigInteger.Max(cursor, span.Last + 1);
             }
-            if (cursor <= maximum) result.Add(Address(cursor, bits) + "-" + Address(maximum, bits));
+            if (cursor <= maximum) AppendPrefixes(result, cursor, maximum, bits);
             return result.ToArray();
+        }
+        private static void AppendPrefixes(List<string> result, BigInteger first, BigInteger last, int bits)
+        {
+            while (first <= last)
+            {
+                int prefix = bits;
+                BigInteger size = BigInteger.One;
+                while (prefix > 0)
+                {
+                    BigInteger nextSize = size * 2;
+                    if (first % nextSize != 0 || first + nextSize - 1 > last) break;
+                    size = nextSize;
+                    prefix--;
+                }
+                result.Add(Address(first, bits) + "/" + prefix);
+                first += size;
+            }
         }
         private static BigInteger Number(IPAddress ip)
         {

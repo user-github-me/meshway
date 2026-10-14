@@ -104,12 +104,14 @@ jobs:
       - run: ./scripts/windows-tun-lab.ps1 -Package dist/Meshway-win-x64
       - run: ./scripts/windows-firewall-lab.ps1 -Package dist/Meshway-win-x64
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: windows-runtime-evidence
           path: |
             artifacts/windows-validation.json
             artifacts/windows-wintun-validation.json
             artifacts/windows-firewall-validation.json
+            artifacts/windows-firewall-debug
   android:
     runs-on: ubuntu-latest
     steps:

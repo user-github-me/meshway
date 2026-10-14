@@ -13,7 +13,11 @@ function Add-MeshwayFirewall {
             if ($LocalPorts) { $arguments.LocalPort=$LocalPorts }
             if ($RemotePorts) { $arguments.RemotePort=$RemotePorts }
             if ($IcmpTypes) { $arguments.IcmpType=$IcmpTypes }
-            New-NetFirewallRule @arguments | Out-Null
+            try { New-NetFirewallRule @arguments | Out-Null }
+            catch {
+                $sample = ($Addresses[$index..$last] | Select-Object -First 6) -join ', '
+                throw "Firewall protocol $Protocol rejected a $($last-$index+1)-prefix batch [$sample]: $($_.Exception.Message)"
+            }
             $script:meshwayFirewallSerial++
         }
     }
