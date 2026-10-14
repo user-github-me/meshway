@@ -23,3 +23,5 @@ apps/windows/**/obj/
 artifacts/core-validation/
 __pycache__/
 *.pyc
+.personal-use/
+/personal use/

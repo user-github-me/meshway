@@ -1,0 +1,94 @@
+{
+  "date": "2026-10-14T14:33:46.136215+00:00",
+  "version": "0.1.0-alpha.2",
+  "public_exit_geolocation": "Singapore",
+  "same_account_pinned_server": true,
+  "native_app": {
+    "gui_sha256": "db4ecf346205eb8f61a4db550ff10eb8b3f62da0dfd5971e2df023a038d1989c",
+    "core_sha256": "045c4cfaf742392cb00b2d4cf19217f61787af78602b23ffed3a4674a2bd11ef",
+    "system_proxy_verified": true
+  },
+  "default_browser_checks": [
+    {
+      "browser": "brave",
+      "batch": 0,
+      "passed": true,
+      "checks": {
+        "expected_exit_ip": true,
+        "dual_stack_exit_ip": true,
+        "browser_https": true,
+        "temporary_browser_closed": true,
+        "host_network_baseline_preserved": true
+      }
+    },
+    {
+      "browser": "chrome",
+      "batch": 0,
+      "passed": true,
+      "checks": {
+        "expected_exit_ip": true,
+        "dual_stack_exit_ip": true,
+        "browser_https": true,
+        "temporary_browser_closed": true,
+        "host_network_baseline_preserved": true
+      }
+    },
+    {
+      "browser": "brave",
+      "batch": 1,
+      "passed": true,
+      "checks": {
+        "expected_exit_ip": true,
+        "dual_stack_exit_ip": true,
+        "browser_https": true,
+        "temporary_browser_closed": true,
+        "host_network_baseline_preserved": true
+      }
+    },
+    {
+      "browser": "chrome",
+      "batch": 1,
+      "passed": true,
+      "checks": {
+        "expected_exit_ip": true,
+        "dual_stack_exit_ip": true,
+        "browser_https": true,
+        "temporary_browser_closed": true,
+        "host_network_baseline_preserved": true
+      }
+    },
+    {
+      "browser": "brave",
+      "batch": 2,
+      "passed": true,
+      "checks": {
+        "expected_exit_ip": true,
+        "dual_stack_exit_ip": true,
+        "browser_https": true,
+        "temporary_browser_closed": true,
+        "host_network_baseline_preserved": true
+      }
+    },
+    {
+      "browser": "chrome",
+      "batch": 2,
+      "passed": true,
+      "checks": {
+        "expected_exit_ip": true,
+        "dual_stack_exit_ip": true,
+        "browser_https": true,
+        "temporary_browser_closed": true,
+        "host_network_baseline_preserved": true
+      }
+    }
+  ],
+  "reconnect_cycles": 6,
+  "reconnect_binary_sha256": "37c2330e20aa97f52f20d9b6902cefe7861bf05c29809dcf7798ebff095a5a51",
+  "owned_test_ssh_child_restart_tls_exit_ip": true,
+  "test_daemon_stopped": true,
+  "temporary_state_removed": true,
+  "production_baseline_unchanged": true,
+  "tests_changed_host_network": false,
+  "scope": "macOS system SOCKS proxy for supported applications; device-wide TUN validation is separate",
+  "status": "PASS"
+}

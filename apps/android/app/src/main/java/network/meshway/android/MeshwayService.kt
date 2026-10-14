@@ -71,6 +71,7 @@ class MeshwayService : VpnService() {
                 try {
                     val active = requireNotNull(node)
                     val selected = intent.getStringExtra("peer") ?: ""
+                    require(intent.getBooleanExtra("internet", false) || !vpnActive) { "Disconnect the active VPN before selecting a SOCKS connection." }
                     active.selectPeer(selected, intent.getStringExtra("address") ?: "")
                     if (intent.getBooleanExtra("internet", false)) startInternet(active, selected)
                     else NodeState.update(NodeState.snapshot.copy(message = "Server selected. SOCKS applications can use this connection."))
@@ -185,7 +186,15 @@ class MeshwayService : VpnService() {
         val status = JSONObject(raw)
         val upstream = if (status.optString("upstream_peer").isEmpty()) "No exit selected" else if (status.optBoolean("upstream_connected")) "Selected exit connection is live" else "Selected exit offline · reconnects on traffic"
         val internet = if (internetPeer.isEmpty()) "" else if (status.optJSONObject("vpn")?.optBoolean("active") == true) "Internet VPN connected · IPv4, IPv6 and DNS\n" else "Internet VPN reconnecting · traffic blocked\n"
-        return "$internet$upstream\nPeer: ${status.optString("peer_id")}\nSOCKS5: ${status.optString("socks_listen")}\nConnected peers: ${status.optJSONArray("peers")?.length() ?: 0}\nSent: ${status.optLong("bytes_sent")} bytes · Received: ${status.optLong("bytes_received")} bytes\n" + (status.optJSONArray("addresses")?.let { addresses -> (0 until addresses.length()).joinToString("\n") { addresses.getString(it) } } ?: "")
+        val listener = status.optString("socks_listen").ifEmpty { "disabled" }
+        val forwards = status.optJSONObject("configuration_summary")?.optJSONArray("forwards")?.length() ?: 0
+        return "$internet$upstream\nSOCKS5: $listener\nConnected peers: ${status.optJSONArray("peers")?.length() ?: 0} · configured TCP listeners: $forwards\nTraffic: ↑ ${readableBytes(status.optLong("bytes_sent"))} · ↓ ${readableBytes(status.optLong("bytes_received"))}\nSOCKS payload + VPN packets; transport overhead excluded"
+    }
+
+    private fun readableBytes(bytes: Long): String = when {
+        bytes >= 1024 * 1024 -> String.format(java.util.Locale.ROOT, "%.1f MiB", bytes / (1024.0 * 1024))
+        bytes >= 1024 -> String.format(java.util.Locale.ROOT, "%.1f KiB", bytes / 1024.0)
+        else -> "$bytes B"
     }
 
     private fun stopNode(message: String) {

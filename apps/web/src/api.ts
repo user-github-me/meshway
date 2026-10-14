@@ -3,6 +3,9 @@ export type Status = {
   version: string; peer_id: string; addresses: string[]; peers: Peer[];
   roles: { relay: boolean; exit: boolean }; socks_listen: string; api_listen: string;
   upstream_peer: string; upstream_connected?: boolean; started_at: string; bytes_sent: number; bytes_received: number;
+  vpn?: { active?: boolean; peer_id?: string; mode?: string; device_attached?: boolean } | null;
+  configuration_summary?: { socks_enabled: boolean; personal_server: boolean; forwards: { name: string; listen: string; service?: string }[] };
+  transport?: { kind: string; configured: boolean; running: boolean; ready: boolean; authenticated: boolean; local_address?: string; peer_id?: string; error?: string };
 };
 
 // Credentials belong to a local process. Never send them to arbitrary or remote URLs.
@@ -26,6 +29,17 @@ export function parseStatus(value: unknown): Status {
     || (s.upstream_connected !== undefined && typeof s.upstream_connected !== 'boolean')
     || ['bytes_sent', 'bytes_received'].some(k => typeof s[k] !== 'number' || !Number.isFinite(s[k]) || (s[k] as number) < 0)) {
     throw new Error('The daemon status does not match the supported API.');
+  }
+  if (s.vpn !== undefined && s.vpn !== null) {
+    if (typeof s.vpn !== 'object' || (s.vpn as Record<string, unknown>).active !== undefined && typeof (s.vpn as Record<string, unknown>).active !== 'boolean') throw new Error('The VPN status does not match the supported API.');
+  }
+  if (s.configuration_summary !== undefined) {
+    const c = s.configuration_summary as Record<string, unknown>;
+    if (!c || typeof c !== 'object' || typeof c.socks_enabled !== 'boolean' || typeof c.personal_server !== 'boolean' || !Array.isArray(c.forwards) || !c.forwards.every(f => f && typeof f.name === 'string' && typeof f.listen === 'string' && (f.service === undefined || typeof f.service === 'string'))) throw new Error('The node configuration summary is invalid.');
+  }
+  if (s.transport !== undefined && s.transport !== null) {
+    const t = s.transport as Record<string, unknown>;
+    if (typeof t !== 'object' || typeof t.kind !== 'string' || ['configured', 'running', 'ready', 'authenticated'].some(k => typeof t[k] !== 'boolean') || ['local_address', 'peer_id', 'error'].some(k => t[k] !== undefined && typeof t[k] !== 'string')) throw new Error('The personal transport status is invalid.');
   }
   return s as unknown as Status;
 }
