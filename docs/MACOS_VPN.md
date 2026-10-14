@@ -9,7 +9,12 @@ The helper is undergoing integration and runtime qualification. Fake-backend
 and socket tests establish specific cleanup and packet-I/O behavior. They do
 not establish actual macOS routing, resolver selection, sleep/wake behavior or
 recovery on a physical machine. Do not interpret a successful build as a passed
-device VPN test.
+device VPN test. The first disposable hosted runs installed and verified owned
+IPv4/IPv6 capture routes and virtual DNS entries, but native DNS and controlled
+UDP response checks failed. Cleanup restored the original routes, DNS and proxy;
+the temporary Azure exit was deleted. These partial results are recorded in
+[macos-utun-runtime-partial.json](../artifacts/macos-utun-runtime-partial.json)
+and do not qualify full-device VPN operation.
 
 ## Ownership and setup
 
@@ -56,6 +61,13 @@ ID and supplies `X-Meshway-VPN-Session` on its reads, writes, status and Stop
 requests. A different native client cannot claim or stop that queue. No API is
 exposed on the public network.
 
+The daemon reports `capture_ready` only after the helper verifies actual route
+and resolver ownership. Its `capture_instance` correlates the live helper with
+the app's own launch; connection to an encrypted peer alone is not proof that
+application traffic is captured. The private recovery journal retains the
+packet-session owner and original configuration owner so stale Stop can release
+that exact queue without stopping a newer native session.
+
 Packet reads and writes use a nonblocking descriptor and bounded polling.
 Stopping workers first leaves the descriptor open during owned-route cleanup;
 closing it earlier would allow macOS to reuse the interface name. Stale
@@ -85,3 +97,11 @@ tests use fake route/DNS executors and cover foreign resources, ambiguous
 failures and continued cleanup. They never change the development host's
 routes, DNS, VPN or proxy. Actual administrator setup belongs in a disposable
 macOS VM or a separately authorized physical-device test with recovery access.
+
+The manual `macos-utun.yml` workflow runs `scripts/macos-utun-lab.py` only on an
+explicit disposable GitHub macOS runner. It creates a fresh private account,
+publishes only its public peer ID for a separately authorized temporary exit,
+then checks kernel routes, native DNS, public TCP/TLS and explicit/parent-exit/
+SIGKILL recovery. Its artifacts contain bounded results and public identity;
+configuration, account files and private helper logs are excluded. A failed
+native check stays a failed runtime gate even when cleanup succeeds.

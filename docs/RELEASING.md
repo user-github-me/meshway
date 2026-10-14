@@ -2,6 +2,22 @@
 
 The owner-authorized source/release destination is `github.com/user-github-me/meshway`, with GitHub Pages and `ghcr.io/user-github-me/meshway` distribution. The separately authorized persistent Azure encrypted relay is documented in `docs/PUBLIC_NETWORK.md`. npm namespace ownership, browser/app-store listings, Apple provisioning, Windows certificates and a custom domain require their respective owner credentials/configuration.
 
+Use a separate artifact directory for a later release so the previous signed
+release stays unchanged. For example, after freezing alpha2 source:
+
+```sh
+MESHWAY_DIST_DIR="$PWD/.tools/release/alpha2/dist" MESHWAY_RELEASE_DIR="$PWD/.tools/release/alpha2/artifacts" MESHWAY_RELEASE_VERSION=0.1.0-alpha.2 ./scripts/release.sh
+```
+
+`scripts/build.sh` accepts `MESHWAY_DIST_DIR`; `native-manifest.py --dist` reads
+that same build tree. Android accepts `MESHWAY_ANDROID_OUTPUT_DIR` for its APK,
+Windows `build.ps1` accepts `-Output` and `-AppVersion`, and Debian `--output`
+and RPM `MESHWAY_RELEASE_DIR` keep packages in the selected staging directory.
+Copy complete final native builds before generating metadata. Alpha2 uses
+publisher sequence 2; it must never replace public sequence-1 metadata. After
+publication, run `node scripts/validate-published-release.mjs 0.1.0-alpha.2 2`
+to verify an actual public install with the pinned publisher key.
+
 ## Publisher signatures and updates
 
 Meshway has an Ed25519 publisher public key in `config/release-public.pem`, also shipped in `packages/cli/release-public.pem`. The initial private key is in the ignored `.tools/release/publisher-private.pem` with mode 0600. Back it up securely outside this checkout before deleting development state. Never publish it, put it in an artifact directory, print it, or use an account recovery key as a release signing key. Authorized release automation stores it only as an encrypted GitHub environment secret, protected by owner review. A public release signature establishes publisher identity; it does not replace OS code signing or an independent security review.

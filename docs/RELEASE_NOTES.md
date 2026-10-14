@@ -1,43 +1,44 @@
-Meshway 0.1.0-alpha.1 is an experimental Apache-2.0 peer VPN, SOCKS and tunneling implementation. The public website is https://user-github-me.github.io/meshway/ and source is https://github.com/user-github-me/meshway.
+Meshway 0.1.0-alpha.2 repairs personal-server browsing under concurrent requests and adds a simpler connection dashboard. Meshway is an experimental Apache-2.0 peer VPN, SOCKS and tunneling implementation. [Source](https://github.com/user-github-me/meshway) and the [public website](https://user-github-me.github.io/meshway/) remain open to contributors. Published alpha.1 artifacts remain immutable.
 
-This alpha includes SOCKS5 TCP/UDP, IPv4/IPv6 packet VPN and tunneled DNS; recovery-key accounts with protected local state and optional encrypted peer sync; device revocation and signed history deletion; a server list/map; personal VPS access; and reversible Linux routing, DNS and firewall setup. Internet exits require explicit consent and peer authorization. One owner-operated Azure encrypted relay is live; [public invitations](https://github.com/user-github-me/meshway/blob/main/config/public-bootstrap.json) assist peer connections and provide no internet exit access.
+The main controls now show **VPN**, **SOCKS**, and **Personal tunnel**, with service-port tools and technical settings underneath. Personal transport uses Meshway's encrypted connection through an existing, pinned OpenSSH alias where supported. Android uses direct Meshway TCP/QUIC personal-server invitations and clearly discloses that an SSH client is not included.
 
-Choose an artifact for your platform:
+This release fixes an authentication concurrency limit that rejected simultaneous same-account browser streams, keeps authentication proofs tied to the exact live encrypted connection, and gives connection stages a bounded handshake deadline. The Mac app verifies application internet access separately from peer readiness, reports the measured exit IP, and detects changes to its effective proxy settings. Its optional System proxy uses a reversible authorization transaction and preserves subsequent changes made by another application. Recovery keys and account history remain local, with protected storage and optional authenticated encrypted sync.
 
-| Platform | Download | What is included |
+Choose the artifact for your platform:
+
+| Platform | Download | Included and qualification |
 | --- | --- | --- |
-| Android | `meshway-android-debug.apk` | Kotlin app and Go VpnService bridge; development APK with a debug signature |
-| macOS, Intel or Apple Silicon | `Meshway-macos.dmg` / `Meshway-macos.zip` | Drag-to-Applications universal Swift app, packet-tunnel extension and universal daemon; owner signing is required for installed packet VPN |
-| macOS, Apple Silicon fallback | `Meshway-macos-arm64-daemon-client.zip` | Simple desktop client for the local SOCKS/tunnel daemon |
-| Windows x64 or ARM64 | `Meshway-setup-x64.exe` / `Meshway-setup-arm64.exe`, or portable `Meshway-win-ARCH.zip` | Per-user installer or portable GUI, daemon, privileged VPN helper and vendor-signed Wintun driver |
-| iPhone/iPad | Source and build scripts in the repository | App/provider source builds pass; the installable release is deferred until the owner's Apple Developer account and provisioning are ready |
-| Linux amd64 or arm64 | `.deb`, `.rpm`, or `meshway-linux-ARCH.tar.gz` | Core and Linux VPN controls; distro packages include systemd integration and leave service startup explicit |
-| Chrome or Firefox | `Meshway-extension-chrome.zip` / `Meshway-extension-firefox.zip` | Browser proxy extension; load locally for development; Firefox needs “Run in Private Windows → Allow” before proxy control |
-| npm CLI | `nazifbd-meshway-0.1.0-alpha.1.tgz` / `meshway-cli-0.1.0.tgz` | Public `@nazifbd/meshway` package and original GitHub launcher; both carry the publisher key pin and explicit verified core installer |
-| Containers | `meshway-container-linux-ARCH.tar.gz` | Portable `docker load` archives; also available as `ghcr.io/user-github-me/meshway:0.1.0-alpha.1` for both Linux architectures |
+| Android | `meshway-android-debug.apk` | Kotlin app and Go VpnService bridge; development-signature APK. Full packet VPN passed emulator checks; physical phone/carrier behavior remains separate. |
+| macOS Intel or Apple Silicon | `Meshway-macos.dmg` / `Meshway-macos.zip` | Universal Swift dashboard, universal daemon and Apple packet-provider source build. SOCKS/personal SSH and optional System proxy are available. Administrator utun qualification is pending; installed Apple Network Extension requires owner signing. |
+| Windows x64 or ARM64 | `Meshway-setup-x64.exe` / `Meshway-setup-arm64.exe`, or `Meshway-win-ARCH.zip` | Per-user installer/portable GUI, daemon, privileged helper and vendor-signed Wintun. Actual x64 installer tests pass; ARM64 installation remains unexecuted. |
+| Linux amd64 or arm64 | `.deb`, `.rpm`, or `meshway-linux-ARCH.tar.gz` | Core and explicit Linux VPN controls; systemd packages leave startup to the owner. Both architectures passed actual container install/execute/remove checks. |
+| Chrome or Firefox | `Meshway-extension-chrome.zip` / `Meshway-extension-firefox.zip` | Browser proxy extensions for local development installation. Firefox needs permission to run in private windows before proxy control. |
+| npm CLI | `nazifbd-meshway-0.1.0-alpha.2.tgz` / `meshway-cli-0.1.0.tgz` | Owner-scoped registry package and GitHub launcher with independent publisher pin and explicit verified core installation. |
+| Containers | `meshway-container-linux-ARCH.tar.gz` | Portable Docker image archives and `ghcr.io/user-github-me/meshway:0.1.0-alpha.2` for both Linux architectures. |
+| iPhone/iPad | Public source and build scripts | Binary publication is deferred until the owner's Apple Developer account and provisioning are ready. |
 
-Six raw cores and their archives are also available for macOS/Linux/Windows amd64 and arm64. `native-builds.json` records the exact bundled native executables. The 36 payload files include `LICENSE`, `THIRD_PARTY_NOTICES.txt` and `SHA256SUMS`; `RELEASE.json` and its detached signature complete the 38 release assets. Two signed `meshway-source-0.1.0-alpha.1` ZIP/tar.gz assets include the final committed packaging/source snapshot; GitHub also provides the immutable core tag archives. Every platform's source and build scripts remain public.
+Six raw cores and archives cover macOS/Linux/Windows amd64 and arm64. Exact bundled native hashes are recorded in `native-builds.json`. Explicit source ZIP/tar.gz payloads include the final committed build/packaging snapshot, alongside GitHub's immutable tag source archives. `LICENSE`, third-party notices and checksums accompany the builds. Final asset inventory, source commit and signature expiry are recorded in signed release metadata after all payloads freeze.
 
-Install from npm, then explicitly install the pinned project core:
+Install the owner-scoped package, then explicitly install the verified core:
 
 ```sh
-npm install -g @nazifbd/meshway@alpha
+npm install -g @nazifbd/meshway@0.1.0-alpha.2
 meshway install-core
 meshway version
 ```
 
-The original GitHub package remains available:
+The GitHub-distributed launcher is also available:
 
 ```sh
-npm install -g https://github.com/user-github-me/meshway/releases/download/v0.1.0-alpha.1/meshway-cli-0.1.0.tgz
+npm install -g https://github.com/user-github-me/meshway/releases/download/v0.1.0-alpha.2/meshway-cli-0.1.0.tgz
 meshway install-core
 meshway version
 ```
 
-The registry package version is 0.1.0-alpha.1 under the owner's `@nazifbd` scope; the original GitHub CLI package version is 0.1.0. Both contain the same launcher code, and the installed core reports `Meshway 0.1.0-alpha.1`. The installer verifies Ed25519 metadata, artifact checksums and signed license companions, and rejects altered, expired, downgraded or conflicting releases. Cached launches check the signature and binary before execution. Release sequence is 1, with new-install metadata expiring on 2027-01-12; already verified cached cores can run offline after that date.
+The registry package reports version `0.1.0-alpha.2`; the original GitHub CLI package keeps version `0.1.0`. Their installed core reports `Meshway 0.1.0-alpha.2`. Core installation verifies Ed25519 metadata, file hashes and signed license companions. Altered, expired, downgraded and conflicting releases are rejected; cached launches verify their installed binary. This release uses publisher sequence 2. The publisher signature authenticates content and does not replace Apple provisioning, notarization or Windows Authenticode certificates.
 
-Validation evidence covers actual Azure direct/forced-relay HTTPS, dual restrictive NAT with packet loss and recovery, Android emulator VPN TCP/DNS/TLS and exit failure recovery, Windows vendor-signed Wintun kernel IPv4/IPv6 TCP plus production firewall UDP blocking/exact-peer bypass/cleanup on an owned adapter, Linux kernel VPN crash/rollback, actual Debian/RPM installation/removal, Chromium and Firefox proxy restoration, and source-built multiarchitecture containers. See the [capability matrix](https://github.com/user-github-me/meshway/blob/main/docs/STATUS.md) and [runtime evidence](https://github.com/user-github-me/meshway/blob/main/docs/VALIDATION.md) for the tested scope.
+Actual Mac personal-server validation used fresh default-proxy Brave and Chrome profiles through the same-account encrypted SSH connection. Repeated concurrent browsers, disconnect/reselect cycles and owned SSH-child recovery passed expected exit-IP and certificate-verified HTTPS checks. Production website processes, routes and resolvers retained their baseline. Separate native Linux package jobs executed both architectures' Debian/RPM installation, private state permissions, required VPN tools, explicit service startup and account-preserving removal. Android's visible modes and SOCKS lifecycle passed on the final staged emulator APK; earlier real emulator TUN tests cover TCP, DNS, TLS and peer-loss behavior. Windows x64 installer tests verify exact installed payloads, shortcuts, no automatic networking, account-preserving removal and unchanged routes/DNS. See the [capability matrix](https://github.com/user-github-me/meshway/blob/main/docs/STATUS.md) and [runtime evidence](https://github.com/user-github-me/meshway/blob/main/docs/VALIDATION.md) for exact executable hashes and test scope.
 
-The macOS DMG passed read-only mounted file/shortcut/notice checks. The Windows x64 installer passed actual installation, exact payload and shortcut checks, data-preserving removal and unchanged routes/DNS. The ARM64 installer is cross-built; its installation on ARM64 Windows remains unverified. The public npm tarball passed anonymous download and temporary installation checks. Installers start networking only after an explicit app action.
+The administrator Mac utun helper is a separate implementation from the Apple Network Extension and can operate without an Apple Developer account once qualified. Its ownership, packet I/O and rollback tests pass. Actual disposable hosted Mac tests verified owned IPv4/IPv6 capture routes and virtual resolver installation, then failed native DNS and controlled UDP response checks. Every attempted test restored its prior network state, and its temporary Azure group was deleted. Packet-header diagnosis is continuing; no working full-device Mac VPN claim follows from this partial result, compilation or peer readiness. The download's controls remain gated accordingly. There is no persistent Mac crash firewall kill switch. Physical-device cellular switching, sleep/wake, prolonged background operation, full Windows GUI route/DNS/crash behavior and independent security review remain qualification gates.
 
-Verify `RELEASE.json.sig` using the publisher Ed25519 public key acquired independently of the download, then verify every chosen artifact hash. The release signature authenticates publisher content; macOS/Windows owner code-signing certificates and Apple provisioning remain separate requirements. Android uses a development signing key, and Wintun retains its verified upstream vendor signature. Physical-device carrier/sleep-wake behavior, installed Apple packet VPN and independent security review remain qualification gates. This alpha provides encrypted connectivity without an anonymity or universal-network-reachability guarantee.
+Internet exits require explicit consent and peer authorization. The public owner-operated Azure relay carries encrypted peer traffic and provides no open internet exit access; [public invitations](https://github.com/user-github-me/meshway/blob/main/config/public-bootstrap.json) explain its role. This alpha provides encrypted connectivity without an anonymity or universal-network-reachability guarantee. Platform certificates and store listings remain owner-managed distribution steps.

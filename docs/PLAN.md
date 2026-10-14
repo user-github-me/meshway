@@ -9,7 +9,7 @@ Meshway is an Apache-2.0 open source peer network with a shared Go networking co
 - Joining is by explicit peer multiaddress or configured bootstrap peers. No centrally hosted discovery service is assumed. Running an initial relay/bootstrap on a VPS remains necessary for networks behind restrictive NAT.
 - Relaying encrypted traffic and forwarding internet traffic are separate capabilities. Internet exits and private/LAN targets need explicit opt-in. Default operation never publishes an open internet proxy.
 - SOCKS5 and TCP tunnels operate without system VPN privileges. IP VPN mode needs an OS TUN interface or a mobile VPN API, routes, and explicit setup. Browser extensions configure a browser proxy; they cannot supply a device-wide VPN.
-- Native SwiftUI on macOS, C#/WPF on Windows, and Kotlin on Android use the shared Go daemon or gomobile binding. Linux uses the CLI and local web dashboard. Linux uses TUN; macOS/iOS use Network Extension and Windows uses Wintun. Native runtime evidence and legitimate signing remain separate requirements.
+- Native SwiftUI on macOS, C#/WPF on Windows, and Kotlin on Android use the shared Go daemon or gomobile binding. Linux uses the CLI and local web dashboard. Linux uses TUN; Apple platforms use Network Extension and Windows uses Wintun. An optional administrator utun bridge for unsigned macOS builds is being qualified separately. Native runtime evidence and legitimate signing remain separate requirements.
 - No custom encryption or anonymity claims. Relay/exit metadata, exit visibility, network abuse, traffic limits, and platform privileges are documented. Public internet exit operation is experimental pending security review.
 - Accounts are generated Ed25519 recovery keys without email or a hosted account database. A separate device peer key is authorized by the account root, avoiding conflicting peer IDs when one account is used on multiple devices. History is local; encrypted, authenticated sync is optional. Device visibility means paired/synced devices with last-seen metadata, not an omniscient live global directory. Revoking a device cannot neutralize a stolen account recovery key; offline root rotation produces a new account and requires every private server to import the new backup.
 
@@ -78,7 +78,7 @@ Configuration is JSON: identity/state directory; libp2p listen addresses; bootst
 - [x] Record actual GitHub source/website/container publication and native/kernel CI evidence.
 - [x] Direct Windows x64/ARM64 EXE installers and universal macOS DMG; actual x64 install/uninstall and mounted DMG content checks pass.
 - [x] Public npm `@nazifbd/meshway` alpha package; anonymous download and temporary installation verified.
-- [ ] Publish the initial signed GitHub release and verify installation from its public downloads.
+- [x] Publish the initial signed GitHub release and verify installation from both public GitHub and npm downloads, including rejection of a modified cached core.
 - [ ] Legitimate owner-signed native/store releases and physical-device field gates.
 
 ### 5 — Harden and verify
@@ -105,3 +105,13 @@ Configuration is JSON: identity/state directory; libp2p listen addresses; bootst
 ## Completion criteria
 
 The first deliverable must be a runnable, tested open source foundation with a real encrypted client/server path and buildable web/desktop/extension packages. Platform source code and release automation must clearly state whether their platform tools, privileges, devices, signing credentials, and external infrastructure were available. A checklist item is complete only after its code or document exists and its relevant available checks pass. Unavailable hardware, public deployment, security audits, and signing cannot be represented as completed.
+
+### Alpha.2 repair acceptance
+- [x] Managed foreground SSH, pinned same-account authentication, reconnect backoff clearing and owned child cleanup.
+- [x] Actual external browser exit IP and HTTPS over the personal server; six disconnect/reselect cycles and owned SSH recovery.
+- [x] Exact website logo in native dashboard and packaged Dock icon; shared button hit geometry verified.
+- [x] Nonblocking storage authorization with explicit own-Keychain permission action, preserving existing account.
+- [x] Batched reversible macOS proxy source, competing-proxy priority handling, isolated preferences framework checks.
+- [x] Current native app startup and actual macOS System proxy browser IP after user authorization; three concurrent browser pairs, six reconnects and owned SSH loss/recovery pass.
+- [ ] Administrator utun GUI integration, isolated native route/resolver and failure-recovery qualification.
+- [ ] Build and publish distinct alpha.2 installers/packages from the final verified source.

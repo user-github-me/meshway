@@ -20,6 +20,23 @@ Use a VPS and a client on another network. Build/copy the correct binaries. Conf
 
 Use `curl --socks5-hostname 127.0.0.1:1080 --noproxy '' https://example.com/` to verify traffic. Check the exit public IP using a trusted endpoint of your choosing. Verify a different account is rejected; verify a revoked device is rejected after that server observes the revocation. Disconnect, stop the server, and confirm the proxy fails clearly. Restart and reconnect, confirming no misleading connected state.
 
+For actual browser behavior, run:
+
+```sh
+node scripts/browser-exit-check.mjs --expected-exit-ip YOUR_SERVER_IP --proxy socks5://127.0.0.1:1080
+```
+
+It opens a
+temporary browser profile, requires matching IPv4 and dual-stack public exit checks plus successful
+certificate-verified HTTPS, then closes that profile. Omit `--proxy` to test the
+browser using current macOS system proxy preferences. The script does not
+activate a proxy, start a daemon or modify routes/DNS. On macOS and Linux it
+records hashes of the current network baseline before and after. The output
+contains public fixture hostnames and traffic results; credentials are never
+accepted. Install the repository's npm dependencies first; macOS uses installed
+Google Chrome and other platforms use Playwright Chromium unless `--browser`
+specifies an executable.
+
 Repeat with a public community gateway using explicit allowed peer IDs. Test Wi-Fi, cellular, restrictive firewall, IPv4 and IPv6 if available. Record date, platform/build, transport, topology, and exact outcomes. Do not claim these tests passed without actual machines and results.
 
 ## Relay fallback

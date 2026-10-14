@@ -1,0 +1,139 @@
+{
+  "date": "2026-10-14T14:39:26.342891+00:00",
+  "version": "0.1.0-alpha.2",
+  "status": "PASS",
+  "local_architecture": "arm64",
+  "development_host_network_mutated": false,
+  "package_checks": [
+    {
+      "format": "deb",
+      "image": "postgres:18-bookworm",
+      "package": "meshway_0.1.0-alpha.2_arm64.deb",
+      "package_sha256": "8bdc46768edeb16d2b043be9be54c58d36990f42be743f221b671e94c7a9e038",
+      "version": "0.1.0-alpha.2",
+      "checked_at": "2026-10-14T14:31:08.025389+00:00",
+      "status": "PASS",
+      "native_version": true,
+      "private_state_permissions": true,
+      "vpn_dependencies": true,
+      "no_automatic_service_start": true,
+      "removal_preserves_account": true,
+      "owned_container_removed": true
+    },
+    {
+      "format": "rpm",
+      "image": "fedora:44",
+      "package": "meshway-0.1.0-0.alpha.2.aarch64.rpm",
+      "package_sha256": "8bb1b6badd7e416e92f3c0ba7e7dc32613bb208de4ab6eae7403fc17a2154d4b",
+      "version": "0.1.0-alpha.2",
+      "checked_at": "2026-10-14T14:31:08.023451+00:00",
+      "status": "PASS",
+      "native_version": true,
+      "private_state_permissions": true,
+      "vpn_dependencies": true,
+      "no_automatic_service_start": true,
+      "removal_preserves_account": true,
+      "owned_container_removed": true
+    }
+  ],
+  "amd64_runtime": "Actual hosted Ubuntu x64 Debian/RPM install/version/remove assertions PASS; downloaded packages match their proof SHA256.",
+  "hosted_validation": [
+    {
+      "workflow_run": 38581168020,
+      "source_commit": "9617966",
+      "checks": [
+        {
+          "format": "deb",
+          "image": "debian:bookworm-slim",
+          "package": "meshway_0.1.0-alpha.2_amd64.deb",
+          "package_sha256": "55cc2f5fae3ba856721bfcac0904cf297285d97b5873e404e9dae5794feecef2",
+          "version": "0.1.0-alpha.2",
+          "checked_at": "2026-10-14T14:31:51.989162+00:00",
+          "status": "PASS",
+          "native_version": true,
+          "private_state_permissions": true,
+          "vpn_dependencies": true,
+          "no_automatic_service_start": true,
+          "removal_preserves_account": true,
+          "owned_container_removed": true
+        },
+        {
+          "format": "rpm",
+          "image": "fedora:44",
+          "package": "meshway-0.1.0-0.alpha.2.x86_64.rpm",
+          "package_sha256": "02d5dc6bd965783173e2951f741c2d0124ea6c7865719114432b62db4d6c2c0c",
+          "version": "0.1.0-alpha.2",
+          "checked_at": "2026-10-14T14:32:00.290544+00:00",
+          "status": "PASS",
+          "native_version": true,
+          "private_state_permissions": true,
+          "vpn_dependencies": true,
+          "no_automatic_service_start": true,
+          "removal_preserves_account": true,
+          "owned_container_removed": true
+        }
+      ]
+    },
+    {
+      "workflow_run": 38581168020,
+      "source_commit": "9617966",
+      "checks": [
+        {
+          "format": "deb",
+          "image": "debian:bookworm-slim",
+          "package": "meshway_0.1.0-alpha.2_arm64.deb",
+          "package_sha256": "3601c7f2526366b6cbaf9c3266ff9167ae65e0f3b73356da737a65b3a64e7a75",
+          "version": "0.1.0-alpha.2",
+          "checked_at": "2026-10-14T14:31:35.373414+00:00",
+          "status": "PASS",
+          "native_version": true,
+          "private_state_permissions": true,
+          "vpn_dependencies": true,
+          "no_automatic_service_start": true,
+          "removal_preserves_account": true,
+          "owned_container_removed": true
+        },
+        {
+          "format": "rpm",
+          "image": "fedora:44",
+          "package": "meshway-0.1.0-0.alpha.2.aarch64.rpm",
+          "package_sha256": "175c0aab7d887b973b3642b16e6932aeb82fa92ab93a4f9f46bac59df9fcc0b3",
+          "version": "0.1.0-alpha.2",
+          "checked_at": "2026-10-14T14:31:42.201840+00:00",
+          "status": "PASS",
+          "native_version": true,
+          "private_state_permissions": true,
+          "vpn_dependencies": true,
+          "no_automatic_service_start": true,
+          "removal_preserves_account": true,
+          "owned_container_removed": true
+        }
+      ]
+    }
+  ],
+  "hosted_package_bytes_verified": true,
+  "hosted_payload_comparison": {
+    "debian": "Both architectures embed byte-identical current raw Meshway core.",
+    "rpm": [
+      {
+        "arch": "amd64",
+        "raw_core_sha256": "18e0af34f380ceacac1dd89e4565c3c79cff47f4cb0172169dd8dcfb236bc206",
+        "rpm_core_sha256": "75ca940815e8a0d106ef9a0a9bb9e271c9ea9336f1ff8314e8f867673fc868db",
+        "loaded_elf_sections_identical": true,
+        "elf_program_layout_and_entry_preserved": true,
+        "only_zero_segment_padding_removed": true,
+        "difference": "RPM build strips nonloaded ELF metadata; all allocated code/data/BSS sections and addresses are identical."
+      },
+      {
+        "arch": "arm64",
+        "raw_core_sha256": "b4574548582e6cd22c08a03fed447e009178fb1cae51952a3be9d1f43a4cc2f3",
+        "rpm_core_sha256": "788d4ff7490d75cdaf9f1069a6a782a4a01dc25edf864d3371aa9c391f0ebe8b",
+        "loaded_elf_sections_identical": true,
+        "elf_program_layout_and_entry_preserved": true,
+        "only_zero_segment_padding_removed": true,
+        "difference": "RPM build strips nonloaded ELF metadata; all allocated code/data/BSS sections and addresses are identical."
+      }
+    ]
+  },
+  "hosted_archives_crc_verified": true
+}

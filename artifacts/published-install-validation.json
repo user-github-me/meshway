@@ -1,0 +1,18 @@
+{
+  "status": "PASS",
+  "checked_at": "2026-10-14T06:24:39.569Z",
+  "repository": "user-github-me/meshway",
+  "version": "Meshway 0.1.0-alpha.1",
+  "metadata_sha256": "61aaca701cdc1c01cc743db9d695ce93eadf05cda9c0d20ddf33e3ff22fa5965",
+  "signed_file_count": 36,
+  "package_sha256": "7a758878c6d79116ece75c409f705586cb1fb1f2e0c6854f57d7afbd9c4cb559",
+  "core": "meshway-darwin-arm64",
+  "core_sha256": "efcb7e9abf9ebff23b802580669f3912be36fda2e23063acfc5e53cd9b499ff7",
+  "source_publisher_pin": true,
+  "github_tarball_installed_locally": true,
+  "explicit_default_core_install": true,
+  "signed_notices": true,
+  "cached_tamper_rejected_before_execution": true,
+  "host_routing_dns_proxy_changes": false,
+  "temporary_package_and_core_removed": true
+}
