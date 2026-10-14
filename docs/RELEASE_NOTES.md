@@ -7,18 +7,26 @@ Choose an artifact for your platform:
 | Platform | Download | What is included |
 | --- | --- | --- |
 | Android | `meshway-android-debug.apk` | Kotlin app and Go VpnService bridge; development APK with a debug signature |
-| macOS, Intel or Apple Silicon | `Meshway-macos.zip` | Universal Swift app, packet-tunnel extension and universal daemon; owner signing is required for installed packet VPN |
+| macOS, Intel or Apple Silicon | `Meshway-macos.dmg` / `Meshway-macos.zip` | Drag-to-Applications universal Swift app, packet-tunnel extension and universal daemon; owner signing is required for installed packet VPN |
 | macOS, Apple Silicon fallback | `Meshway-macos-arm64-daemon-client.zip` | Simple desktop client for the local SOCKS/tunnel daemon |
-| Windows x64 or ARM64 | `Meshway-win-x64.zip` / `Meshway-win-arm64.zip` | GUI, daemon, privileged VPN helper and vendor-signed Wintun driver |
-| iPhone/iPad | `Meshway-ios-unsigned.ipa` / `Meshway-ios-unsigned.zip` | Swift app and packet-tunnel provider; developer artifacts requiring an Apple team and provisioning before installation |
+| Windows x64 or ARM64 | `Meshway-setup-x64.exe` / `Meshway-setup-arm64.exe`, or portable `Meshway-win-ARCH.zip` | Per-user installer or portable GUI, daemon, privileged VPN helper and vendor-signed Wintun driver |
+| iPhone/iPad | Source and build scripts in the repository | App/provider source builds pass; the installable release is deferred until the owner's Apple Developer account and provisioning are ready |
 | Linux amd64 or arm64 | `.deb`, `.rpm`, or `meshway-linux-ARCH.tar.gz` | Core and Linux VPN controls; distro packages include systemd integration and leave service startup explicit |
 | Chrome or Firefox | `Meshway-extension-chrome.zip` / `Meshway-extension-firefox.zip` | Browser proxy extension; load locally for development; Firefox needs “Run in Private Windows → Allow” before proxy control |
-| npm-compatible CLI | `meshway-cli-0.1.0.tgz` | Launcher with the publisher key pin and explicit verified core installer |
+| npm CLI | `nazifbd-meshway-0.1.0-alpha.1.tgz` / `meshway-cli-0.1.0.tgz` | Public `@nazifbd/meshway` package and original GitHub launcher; both carry the publisher key pin and explicit verified core installer |
 | Containers | `meshway-container-linux-ARCH.tar.gz` | Portable `docker load` archives; also available as `ghcr.io/user-github-me/meshway:0.1.0-alpha.1` for both Linux architectures |
 
-Six raw cores and their archives are also available for macOS/Linux/Windows amd64 and arm64. `native-builds.json` records the exact bundled native executables. The 32 payload files include `LICENSE`, `THIRD_PARTY_NOTICES.txt` and `SHA256SUMS`; `RELEASE.json` and its detached signature complete the 34 release assets.
+Six raw cores and their archives are also available for macOS/Linux/Windows amd64 and arm64. `native-builds.json` records the exact bundled native executables. The 36 payload files include `LICENSE`, `THIRD_PARTY_NOTICES.txt` and `SHA256SUMS`; `RELEASE.json` and its detached signature complete the 38 release assets. Two signed `meshway-source-0.1.0-alpha.1` ZIP/tar.gz assets include the final committed packaging/source snapshot; GitHub also provides the immutable core tag archives. Every platform's source and build scripts remain public.
 
-Install the CLI from the GitHub package, then explicitly install the pinned project core:
+Install from npm, then explicitly install the pinned project core:
+
+```sh
+npm install -g @nazifbd/meshway@alpha
+meshway install-core
+meshway version
+```
+
+The original GitHub package remains available:
 
 ```sh
 npm install -g https://github.com/user-github-me/meshway/releases/download/v0.1.0-alpha.1/meshway-cli-0.1.0.tgz
@@ -26,7 +34,7 @@ meshway install-core
 meshway version
 ```
 
-The CLI package version is 0.1.0; the installed core reports `Meshway 0.1.0-alpha.1`. There is no npm registry publication for this alpha. The installer verifies Ed25519 metadata, artifact checksums and signed license companions, and rejects altered, expired, downgraded or conflicting releases. Cached launches check the signature and binary before execution. Release sequence is 1, with new-install metadata expiring on 2027-01-12; already verified cached cores can run offline after that date.
+The registry package version is 0.1.0-alpha.1 under the owner's `@nazifbd` scope; the original GitHub CLI package version is 0.1.0. Both contain the same launcher code, and the installed core reports `Meshway 0.1.0-alpha.1`. The installer verifies Ed25519 metadata, artifact checksums and signed license companions, and rejects altered, expired, downgraded or conflicting releases. Cached launches check the signature and binary before execution. Release sequence is 1, with new-install metadata expiring on 2027-01-12; already verified cached cores can run offline after that date.
 
 Validation evidence covers actual Azure direct/forced-relay HTTPS, dual restrictive NAT with packet loss and recovery, Android emulator VPN TCP/DNS/TLS and exit failure recovery, Windows vendor-signed Wintun kernel IPv4/IPv6 TCP plus production firewall UDP blocking/exact-peer bypass/cleanup on an owned adapter, Linux kernel VPN crash/rollback, actual Debian/RPM installation/removal, Chromium and Firefox proxy restoration, and source-built multiarchitecture containers. See the [capability matrix](https://github.com/user-github-me/meshway/blob/main/docs/STATUS.md) and [runtime evidence](https://github.com/user-github-me/meshway/blob/main/docs/VALIDATION.md) for the tested scope.
 

@@ -10,14 +10,14 @@
     "meshway-linux-arm64.tar.gz": "PASS",
     "Meshway-win-x64.zip": "PASS",
     "Meshway-win-arm64.zip": "PASS",
-    "Meshway-ios-unsigned.ipa": "PASS",
     "Mac_universal_GUI_provider_daemon": "PASS",
     "Meshway-macos.zip": "PASS",
-    "native_manifest_18_current_executables": "PASS",
     "Meshway-extension-chrome.zip": "PASS",
     "Meshway-extension-firefox.zip": "PASS",
-    "latest_windows_icmpv6_Any_helpers": "PASS"
+    "latest_windows_icmpv6_Any_helpers": "PASS",
+    "native_manifest_16_included_executables": "PASS"
   },
-  "scope": "Archive contents and native architecture/manifest; publisher signature generated only after final CI and container export.",
-  "payload_file_count": 32
+  "scope": "Archive contents and native architecture/manifest; iOS source developer builds verified earlier, but public binaries are deferred by the owner.",
+  "public_ios_artifacts_included": false,
+  "final_payload_file_count": 36
 }

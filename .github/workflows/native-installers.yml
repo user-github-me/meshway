@@ -1,0 +1,53 @@
+name: Native installer validation
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows-installers:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.2'
+      - name: Build existing native payloads
+        run: |
+          New-Item -ItemType Directory -Force dist/bin | Out-Null
+          foreach ($arch in @('amd64','arm64')) {
+            $env:GOARCH=$arch
+            $env:CGO_ENABLED='0'
+            go build -buildvcs=false -trimpath -ldflags="-s -w" -o "dist/bin/meshway-windows-$arch.exe" ./cmd/meshway
+            if ($LASTEXITCODE -ne 0) { throw 'Go core build failed' }
+            python apps/windows/prepare-wintun.py --arch $arch --output "dist/wintun/$arch/wintun.dll"
+            if ($LASTEXITCODE -ne 0) { throw 'Wintun package failed' }
+            $runtime=if ($arch -eq 'amd64') {'win-x64'} else {'win-arm64'}
+            ./apps/windows/build.ps1 -Runtime $runtime -Wintun "dist/wintun/$arch/wintun.dll"
+          }
+          Remove-Item Env:GOARCH
+      - name: Compile Inno Setup installers
+        run: |
+          $compiler=Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6/ISCC.exe'
+          if (!(Test-Path -LiteralPath $compiler)) {
+            choco install innosetup --no-progress -y
+            if ($LASTEXITCODE -ne 0) { throw 'Inno Setup installation failed' }
+          }
+          ./scripts/build-windows-installer.ps1 -Runtime win-x64
+          ./scripts/build-windows-installer.ps1 -Runtime win-arm64
+      - name: Install and uninstall x64 payload
+        run: ./scripts/windows-installer-lab.ps1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-windows-installers
+          path: |
+            .tools/release/installers/Meshway-setup-x64.exe
+            .tools/release/installers/Meshway-setup-arm64.exe
+            artifacts/windows-installer-validation.json
+            artifacts/windows-installer-debug
+          include-hidden-files: true
+          if-no-files-found: error

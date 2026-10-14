@@ -1,6 +1,6 @@
 # Meshway npm launcher
 
-This package launches the shared Go networking core. It is not an independent JavaScript VPN. No package or hosted release has been published yet.
+This package launches the shared Go networking core. The public npm distribution is `@nazifbd/meshway`; the original `@meshway/cli` launcher tarball is available in the GitHub release.
 
 From this checkout:
 
@@ -12,7 +12,15 @@ node packages/cli/bin/meshway.js init --config .meshway/config.json
 node packages/cli/bin/meshway.js daemon --config .meshway/config.json
 ```
 
-After publishing a release containing raw platform binaries, `RELEASE.json`, and its detached Ed25519 `RELEASE.json.sig`:
+Install the public npm package and explicitly install the signed native core:
+
+```sh
+npm install -g @nazifbd/meshway@alpha
+meshway install-core
+meshway version
+```
+
+Or install the original GitHub tarball:
 
 ```sh
 npm install -g https://github.com/user-github-me/meshway/releases/download/v0.1.0-alpha.1/meshway-cli-0.1.0.tgz

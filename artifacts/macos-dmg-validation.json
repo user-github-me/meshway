@@ -1,0 +1,13 @@
+{
+  "status": "PASS",
+  "artifact": ".tools/release/installers/Meshway-macos.dmg",
+  "bytes": 51974324,
+  "sha256": "44906c56da9dc42a0d0889d39941016f443b89f2938dc54cca60db58ea6c5439",
+  "mounted_app_exact_hashes": true,
+  "universal_gui_and_daemon": true,
+  "applications_shortcut": true,
+  "license_notices": true,
+  "host_network_modified": false,
+  "limitation": "Unsigned experimental app; legitimate Apple signing/Network Extension provisioning and physical VPN runtime remain required.",
+  "mount_and_temporary_files_removed": true
+}

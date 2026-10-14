@@ -9,6 +9,10 @@ python3 - <<'PY'
 from pathlib import Path
 for name in ('RELEASE.json','RELEASE.json.sig'):
     (Path('release')/name).unlink(missing_ok=True)
+import os
+if os.environ.get('MESHWAY_INCLUDE_IOS_ARTIFACTS') != '1':
+    for name in ('Meshway-ios-unsigned.ipa','Meshway-ios-unsigned.zip'):
+        (Path('release')/name).unlink(missing_ok=True)
 PY
 python3 - <<'PY'
 from pathlib import Path
@@ -69,7 +73,7 @@ if app.is_dir() and __import__('sys').platform=='darwin':
         subprocess.run(['ditto','-c','-k','--keepParent',str(simple),str(release/'Meshway-macos-arm64-daemon-client.zip')],check=True)
         (release/'Meshway-macos-daemon-client.zip').unlink(missing_ok=True)
 ios=Path('dist/apple-ios/Build/Products/Release-iphoneos/Meshway.app')
-if ios.is_dir() and __import__('sys').platform=='darwin':
+if ios.is_dir() and __import__('sys').platform=='darwin' and __import__('os').environ.get('MESHWAY_INCLUDE_IOS_ARTIFACTS')=='1':
     subprocess.run(['ditto','-c','-k','--keepParent',str(ios),str(release/'Meshway-ios-unsigned.zip')],check=True)
     import tempfile, shutil
     with tempfile.TemporaryDirectory(prefix='meshway-ipa-') as staging:
@@ -95,7 +99,11 @@ checksums=[f'{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}' for p
 (release/'SHA256SUMS').write_text('\n'.join(checksums)+'\n')
 PY
 release_version=${MESHWAY_RELEASE_VERSION:-$(node -p "JSON.parse(require('fs').readFileSync('package.json','utf8')).version")}
-python3 scripts/native-manifest.py --version "$release_version"
+if [ "${MESHWAY_INCLUDE_IOS_ARTIFACTS:-0}" = 1 ]; then
+  python3 scripts/native-manifest.py --version "$release_version" --include-ios
+else
+  python3 scripts/native-manifest.py --version "$release_version"
+fi
 if [ -n "${MESHWAY_RELEASE_KEY_FILE:-}" ]; then
   : "${MESHWAY_RELEASE_VERSION:?Set release version}"
   : "${MESHWAY_RELEASE_SEQUENCE:?Set monotonically increasing release sequence}"

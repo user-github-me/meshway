@@ -1,0 +1,23 @@
+{
+  "status": "PASS",
+  "workflow_run": 38506344326,
+  "checked_at": "2026-10-14T04:04:32.129323+00:00",
+  "images": [
+    {
+      "architecture": "amd64",
+      "archive_sha256": "61983b0d2927e37cee255a0f1b30817c1a3a78cee480fa54c84d774c51d0466a",
+      "core_sha256": "8804cd116a26672957ff2336b44b6827f6fcfd2852aafe7ad5a507ff40cec818",
+      "source_revision": "5a9ab86e1f6652e08913122d9f57e85f0cdc7538",
+      "notices_match": true,
+      "unprivileged_user": true
+    },
+    {
+      "architecture": "arm64",
+      "archive_sha256": "8b182f8c2bc35e3bcbec865da9a5d955115cd42a696fb6e981267cb8a7445c18",
+      "core_sha256": "9b458d5a42818a3145fb168013f88e0b7ac7ed0f7e0eba1b7c5add2dbbf4c775",
+      "source_revision": "5a9ab86e1f6652e08913122d9f57e85f0cdc7538",
+      "notices_match": true,
+      "unprivileged_user": true
+    }
+  ]
+}

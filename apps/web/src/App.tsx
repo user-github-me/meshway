@@ -67,7 +67,7 @@ function InstallCommands() {
   const snippets: Record<string, { label: string; command: string; note: string }> = {
     Source: { label: 'Build the Go core from your local checkout', command: 'go build -o ./bin/meshway ./cmd/meshway\n./bin/meshway init --config meshway.json\n./bin/meshway daemon --config meshway.json', note: 'Go 1.26+ · Linux, macOS, or Windows. The default node does not share internet access.' },
     'Personal VPS': { label: 'Use the same private account on your own VPS', command: 'meshway setup-server --personal --config meshway.json\nmeshway account import --config meshway.json --input recovery.txt --force\nmeshway daemon --config meshway.json', note: 'Import a secure recovery backup from your own account. Same-account devices are authorized without a manual peer allowlist.' },
-    npm: { label: 'Install the signed Meshway release', command: 'npm install -g https://github.com/user-github-me/meshway/releases/download/v0.1.0-alpha.1/meshway-cli-0.1.0.tgz\nmeshway install-core\nmeshway version', note: 'Node.js 22+ · The launcher verifies the project publisher signature before installing the core. Experimental alpha release.' },
+    npm: { label: 'Install Meshway with npm', command: 'npm install -g @nazifbd/meshway@alpha\nmeshway install-core\nmeshway version', note: 'Node.js 22+ · The launcher verifies the project publisher signature before installing the core. Experimental alpha release; tarballs are also available in GitHub downloads.' },
     Container: { label: 'Build and run the self-hosted peer container', command: 'docker build -t meshway:local .\ndocker compose up -d\ndocker compose logs -f', note: 'Review docker-compose.yml and peer permissions first. The container is built locally.' },
     Dashboard: { label: 'Start the local web dashboard', command: 'npm install\nnpm run dev\n# Open http://127.0.0.1:5173/#/dashboard', note: 'Run the daemon separately. Pair using the api_token in your own meshway.json; it stays in page memory.' },
   };
@@ -78,16 +78,15 @@ function Downloads() {
   const base = 'https://github.com/user-github-me/meshway/releases/download/v0.1.0-alpha.1/';
   const files = [
     ['Android', 'meshway-android-debug.apk', 'Debug APK · testing'],
-    ['iPhone / iPad', 'Meshway-ios-unsigned.ipa', 'Developer IPA · Apple signing required'],
-    ['macOS', 'Meshway-macos.zip', 'Unsigned · VPN signing required'],
-    ['Windows', 'Meshway-win-x64.zip', '64-bit · unsigned app'],
-    ['Windows ARM', 'Meshway-win-arm64.zip', 'ARM64 · unsigned app'],
+    ['macOS', 'Meshway-macos.dmg', 'Disk image · Apple signing required'],
+    ['Windows', 'Meshway-setup-x64.exe', '64-bit installer · experimental'],
+    ['Windows ARM', 'Meshway-setup-arm64.exe', 'ARM64 installer · experimental'],
     ['Linux', 'meshway_0.1.0-alpha.1_amd64.deb', 'Debian / Ubuntu · 64-bit'],
     ['Linux ARM', 'meshway_0.1.0-alpha.1_arm64.deb', 'Debian / Ubuntu · ARM64'],
     ['Chrome', 'Meshway-extension-chrome.zip', 'Load unpacked'],
     ['Firefox', 'Meshway-extension-firefox.zip', 'Development extension'],
   ];
-  return <section className="wrap section-space" aria-labelledby="downloads-heading"><div className="section-heading"><div><div className="eyebrow subdued">GET MESHWAY</div><h2 id="downloads-heading">Choose your device<span>.</span></h2></div><p>Experimental 0.1.0 alpha. Review the release notes<br />and verify signatures before installing.</p></div><div className="server-grid">{files.map(([label, file, note]) => <a key={file} className="server-choice" href={`${base}${file}`}><div><h3>{label}</h3><p>{note}</p></div><ArrowDown size={19} /></a>)}</div><p><a className="text-link" href="https://github.com/user-github-me/meshway/releases/tag/v0.1.0-alpha.1">All downloads, source and release signatures <ArrowUpRight size={14} /></a></p></section>;
+  return <section className="wrap section-space" aria-labelledby="downloads-heading"><div className="section-heading"><div><div className="eyebrow subdued">GET MESHWAY</div><h2 id="downloads-heading">Choose your device<span>.</span></h2></div><p>Experimental 0.1.0 alpha. Review the release notes<br />and verify signatures before installing.</p></div><div className="server-grid"><div className="server-choice" aria-label="iPhone / iPad coming soon"><div><h3>iPhone / iPad</h3><p>Coming soon · Apple Developer account required</p></div></div>{files.map(([label, file, note]) => <a key={file} className="server-choice" href={`${base}${file}`}><div><h3>{label}</h3><p>{note}</p></div><ArrowDown size={19} /></a>)}</div><p><a className="text-link" href="https://github.com/user-github-me/meshway/releases/tag/v0.1.0-alpha.1">All downloads, source and release signatures <ArrowUpRight size={14} /></a></p></section>;
 }
 
 function Footer() { return <footer className="site-footer wrap"><div><Logo small /><p>A network, made of us.</p></div><div className="footer-links"><a href="#/docs">Documentation</a><a href="#/dashboard">Local dashboard</a><a href="#/docs/security">Security & trust</a></div><div className="footer-meta">Apache-2.0 · Meshway 0.1 foundation<br /><span>Built for peers, by peers.</span></div></footer>; }

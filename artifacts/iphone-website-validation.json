@@ -1,0 +1,42 @@
+{
+  "time": "2026-10-14T05:08:55.437Z",
+  "url": "http://127.0.0.1:5273/",
+  "host_network_modified": false,
+  "tests": {
+    "iphone_ipad_deferred_card": "PASS",
+    "active_iphone_download_removed": "PASS",
+    "signing_explanation": {
+      "result": "PASS",
+      "text": "iPhone / iPad\n\nComing soon · Apple Developer account required"
+    },
+    "viewport_390": {
+      "result": "PASS",
+      "horizontal_overflow": false,
+      "card_width": 168,
+      "card_height": 132
+    },
+    "viewport_768": {
+      "result": "PASS",
+      "horizontal_overflow": false,
+      "card_width": 353,
+      "card_height": 112
+    },
+    "viewport_1440": {
+      "result": "PASS",
+      "horizontal_overflow": false,
+      "card_width": 381,
+      "card_height": 124
+    },
+    "failed_resources": {
+      "result": "PASS",
+      "failures": []
+    }
+  },
+  "limitations": [
+    "iPhone/iPad public artifacts deferred until the owner configures legitimate Apple Developer signing/provisioning.",
+    "Chromium responsive emulation is not physical iPhone/iPad Safari testing."
+  ],
+  "browser": "155.0.8059.40",
+  "status": "PASS",
+  "cleanup": "owned browser context closed and temporary profile deleted"
+}

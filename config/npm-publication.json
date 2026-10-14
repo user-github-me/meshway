@@ -1,0 +1,10 @@
+{
+  "name": "@nazifbd/meshway",
+  "version": "0.1.0-alpha.1",
+  "tag": "alpha",
+  "access": "public",
+  "registry": "https://registry.npmjs.org/",
+  "repository": "https://github.com/user-github-me/meshway.git",
+  "homepage": "https://user-github-me.github.io/meshway/",
+  "bugs": "https://github.com/user-github-me/meshway/issues"
+}

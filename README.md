@@ -6,8 +6,10 @@ Meshway is an experimental open-source alpha. [Source](https://github.com/user-g
 
 ## Install the alpha
 
-Download Android, iPhone/iPad, macOS, Windows, Linux, browser extensions and Debian/RPM
-packages from the [release page](https://github.com/user-github-me/meshway/releases/tag/v0.1.0-alpha.1).
+Download Android APK, Windows installers, macOS DMG, Linux binaries/Debian/RPM
+packages and browser extensions from the [release page](https://github.com/user-github-me/meshway/releases/tag/v0.1.0-alpha.1).
+Portable builds and source are available alongside installers. The iPhone/iPad
+release is deferred until the owner's Apple Developer account is ready.
 Release files have an Ed25519-signed manifest; native development signing is
 described alongside each artifact. The public container supports amd64 and arm64:
 
@@ -15,7 +17,16 @@ described alongside each artifact. The public container supports amd64 and arm64
 docker pull ghcr.io/user-github-me/meshway:0.1.0-alpha.1
 ```
 
-The npm launcher is distributed as an installable release package:
+Install the npm launcher from the public registry:
+
+```sh
+npm install -g @nazifbd/meshway@alpha
+meshway install-core
+meshway init
+meshway daemon
+```
+
+The launcher is also distributed as an installable GitHub release package:
 
 ```sh
 npm install -g https://github.com/user-github-me/meshway/releases/download/v0.1.0-alpha.1/meshway-cli-0.1.0.tgz
@@ -25,8 +36,8 @@ meshway daemon
 ```
 
 Use [server deployment instructions](docs/DEPLOYMENT.md) and the
-[Linux device VPN guide](docs/LINUX_VPN.md). npm registry publication requires
-the owner's registry login; the GitHub package installation works without it.
+[Linux device VPN guide](docs/LINUX_VPN.md). The GitHub package installation
+works without a registry login.
 
 ## Run from source
 
