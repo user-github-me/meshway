@@ -77,11 +77,11 @@ jobs:
             docker run --rm --platform "linux/$architecture" "$IMAGE:$VERSION-$architecture" version
             docker save "$IMAGE:$VERSION-$architecture" | gzip > "container-downloads/meshway-container-linux-$architecture.tar.gz"
           done
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: portable-container-images
           path: container-downloads
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: container-publication-evidence
           path: container-manifest.txt
