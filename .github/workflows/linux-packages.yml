@@ -34,10 +34,10 @@ jobs:
       MESHWAY_DIST_DIR: .tools/linux-package-lab/dist
       MESHWAY_RELEASE_DIR: .tools/linux-package-lab/packages
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref }}
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: '1.27.2'
       - name: Build native core and real Debian/RPM packages
@@ -56,7 +56,7 @@ jobs:
           rpm_package=$(find "$MESHWAY_RELEASE_DIR" -maxdepth 1 -name "*.$RPM_ARCH.rpm" -print -quit)
           test -n "$rpm_package"
           python3 scripts/package-install-lab.py --format rpm --image fedora:44 --package "$rpm_package" --version "$PACKAGE_VERSION" --output ".tools/linux-package-lab/rpm-$PACKAGE_ARCH.json"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: linux-packages-${{ matrix.go_arch }}
