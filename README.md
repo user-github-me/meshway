@@ -2,22 +2,22 @@
 
 An open source peer network for encrypted SOCKS5 connections, private TCP service tunnels, volunteer relays, and experimental IPv4/IPv6 internet VPN with tunneled DNS. Go powers the shared core; Kotlin, Swift, C#, and TypeScript power the platform interfaces.
 
-Meshway is an experimental open-source alpha. [Source](https://github.com/user-github-me/meshway), [downloads](https://github.com/user-github-me/meshway/releases/tag/v0.1.0-alpha.1), and the [public website](https://user-github-me.github.io/meshway/) are available. Native owner signing and app-store listings require the owner's credentials. See [the roadmap](docs/PLAN.md) and [verified status](docs/STATUS.md) for implementation and runtime evidence.
+Meshway is an experimental open-source alpha. [Source](https://github.com/user-github-me/meshway), [downloads](https://github.com/user-github-me/meshway/releases/tag/v0.1.0-alpha.2), and the [public website](https://user-github-me.github.io/meshway/) are available. The macOS administrator VPN is included; Apple Network Extension signing and app-store listings require the owner's credentials. See [the roadmap](docs/PLAN.md) and [verified status](docs/STATUS.md) for implementation and runtime evidence.
 
 ## Install the alpha
 
 Download Android APK, Windows installers, macOS DMG, Linux binaries/Debian/RPM
-packages and browser extensions from the [release page](https://github.com/user-github-me/meshway/releases/tag/v0.1.0-alpha.1).
+packages and browser extensions from the [release page](https://github.com/user-github-me/meshway/releases/tag/v0.1.0-alpha.2).
 Portable builds and source are available alongside installers. The iPhone/iPad
 release is deferred until the owner's Apple Developer account is ready.
 Release files have an Ed25519-signed manifest; native development signing is
 described alongside each artifact. The public container supports amd64 and arm64:
 
 ```sh
-docker pull ghcr.io/user-github-me/meshway:0.1.0-alpha.1
+docker pull ghcr.io/user-github-me/meshway:0.1.0-alpha.2
 ```
 
-Install the npm launcher from the public registry:
+The registry currently provides alpha.1. For the new alpha.2 use the GitHub launcher below; registry publication is pending renewed owner login. Install the registry launcher with:
 
 ```sh
 npm install -g @nazifbd/meshway@alpha
@@ -29,7 +29,7 @@ meshway daemon
 The launcher is also distributed as an installable GitHub release package:
 
 ```sh
-npm install -g https://github.com/user-github-me/meshway/releases/download/v0.1.0-alpha.1/meshway-cli-0.1.0.tgz
+npm install -g https://github.com/user-github-me/meshway/releases/download/v0.1.0-alpha.2/meshway-cli-0.1.0.tgz
 meshway install-core
 meshway init
 meshway daemon
@@ -41,7 +41,7 @@ works without a registry login.
 
 ## Run from source
 
-Requirements: Go 1.26+, Node 22+ for the web app. The build script also detects a project-local Go installation under `.tools/go`.
+Requirements: Go 1.27+, Node 22+ for the web app. The build script also detects a project-local Go installation under `.tools/go`.
 
 ```sh
 ./scripts/build.sh
@@ -85,7 +85,7 @@ Create/export/import use private files and must run while the daemon is stopped.
 - Server: [container and systemd instructions](docs/DEPLOYMENT.md).
 - npm: installable GitHub release package under `packages/cli`; downloads verified core releases with `meshway install-core`.
 
-[Platform details](docs/PLATFORMS.md) distinguish compilation, signing, and actual device testing. Apple Network Extension, Windows Wintun, Android VpnService, and Linux TUN integrations are implemented. IPv4/IPv6 TCP, UDP, routed DNS, and Linux failure blocking have working integration tests. Apple signing and physical-device validation remain release requirements. See [VPN behavior](docs/VPN.md) and [desktop integration](docs/DESKTOP_VPN.md).
+[Platform details](docs/PLATFORMS.md) distinguish compilation, signing, and actual device testing. Apple Network Extension, Windows Wintun, Android VpnService, and Linux TUN integrations are implemented. IPv4/IPv6 TCP, UDP, routed DNS, and Linux failure blocking have working integration tests. The macOS administrator helper passed hosted kernel, public DNS/HTTPS and cleanup tests. Apple Network Extension signing and physical-device checks remain separate. See [VPN behavior](docs/VPN.md) and [desktop integration](docs/DESKTOP_VPN.md).
 
 ## Development
 
