@@ -48,6 +48,8 @@ type Node struct {
 	vpn              *vpn.Service
 	vpnMu            sync.RWMutex
 	vpnOwner         string
+	vpnCaptureReady  bool
+	vpnCaptureDevice string
 	Account          *account.Store
 	stateLock        *state.Lock
 	Discovery        *discovery.Service

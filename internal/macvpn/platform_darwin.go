@@ -266,6 +266,9 @@ func Stop(o Options) error {
 	if err != nil {
 		return err
 	}
+	if err = journalCaller(o, j); err != nil {
+		return err
+	}
 	owner, ownerErr := processOwner(j.PID)
 	if j.PID > 1 && j.ProcessStart != "" && ownerErr == nil && owner == 0 && processStart(j.PID) == j.ProcessStart {
 		fd, err := unix.Open(filepath.Join(runtimeDir(o), "stop"), unix.O_CREAT|unix.O_WRONLY|unix.O_TRUNC|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0600)
@@ -298,9 +301,26 @@ func Status(o Options) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if err = journalCaller(o, j); err != nil {
+		return "", err
+	}
 	running := j.ProcessStart != "" && processStart(j.PID) == j.ProcessStart
 	data, _ := json.Marshal(map[string]any{"active": j.Active && running, "running": running, "device": j.Device, "peer_id": j.PeerID, "network_cleanup_pending": !running && (len(j.Steps) > 0 || j.SessionID != "")})
 	return string(data), nil
+}
+
+func journalCaller(o Options, j journal) error {
+	if o.ConfigPath == "" || o.ConfigPath != j.ConfigPath || !filepath.IsAbs(o.ConfigPath) || filepath.Clean(o.ConfigPath) != o.ConfigPath {
+		return errors.New("VPN recovery belongs to a different configuration")
+	}
+	_, uid, err := loadPrivateConfig(o.ConfigPath)
+	if err != nil {
+		return errors.New("VPN recovery requires its original private configuration")
+	}
+	if uid != j.OwnerUID {
+		return errors.New("VPN recovery configuration owner changed")
+	}
+	return nil
 }
 
 type routeInfo struct {
@@ -832,13 +852,30 @@ func Run(ctx context.Context, o Options) (result error) {
 			return err
 		}
 		if !owned {
-			return errors.New("network setup ownership could not be verified; restoring the owned changes")
+			detail := filepath.Base(s.Apply.Name)
+			if s.Apply.Name == "/sbin/route" && len(s.Apply.Args) >= 5 {
+				out, probeErr := e.execute(ctx, command{Name: "/sbin/route", Args: []string{"-n", "get", s.Apply.Args[2], s.Apply.Args[3], s.Apply.Args[4]}})
+				if probeErr == nil {
+					r := parseRoute(out)
+					detail = fmt.Sprintf("route family=%s target=%s destination=%s mask=%s interface=%s flags=%s marker=%d expected_marker=%d", s.Apply.Args[2], s.Apply.Args[4], r.Destination, r.Mask, r.Interface, r.Flags, r.Marker, e.marker)
+				}
+			}
+			return fmt.Errorf("network setup ownership could not be verified (%s); restoring the owned changes", detail)
 		}
 	}
 	j.Active = true
 	if err = saveJournal(o, j); err != nil {
 		return err
 	}
+	readyPayload, _ := json.Marshal(map[string]any{"ready": true, "device": name})
+	if _, _, err = api.request(ctx, "/v1/vpn/capture-ready", readyPayload, "application/json"); err != nil {
+		return errors.New("daemon could not confirm verified device capture")
+	}
+	defer func() {
+		clearCtx, clearCancel := context.WithTimeout(context.Background(), 6*time.Second)
+		defer clearCancel()
+		_, _, _ = api.request(clearCtx, "/v1/vpn/capture-ready", []byte(`{"ready":false}`), "application/json")
+	}()
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	var workers sync.WaitGroup

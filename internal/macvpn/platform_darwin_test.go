@@ -379,3 +379,38 @@ func TestCrashCleanupRetainsJournalWhenOriginalConfigMissing(t *testing.T) {
 		t.Fatal("failed packet cleanup deleted its recovery journal")
 	}
 }
+
+func TestJournalCallerRejectsAnotherConfigurationWithoutTouchingSession(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("app-user fixture")
+	}
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := config.Default(filepath.Join(dir, "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "config.json")
+	other := filepath.Join(dir, "other.json")
+	if err = config.Save(path, c, false); err != nil {
+		t.Fatal(err)
+	}
+	if err = config.Save(other, c, false); err != nil {
+		t.Fatal(err)
+	}
+	j := journal{ConfigPath: path, OwnerUID: uint32(os.Getuid()), SessionID: strings.Repeat("a", 32)}
+	if err = journalCaller(Options{ConfigPath: path}, j); err != nil {
+		t.Fatal(err)
+	}
+	for _, o := range []Options{{ConfigPath: other}, {}, {ConfigPath: path + "/../config.json"}} {
+		if err = journalCaller(o, j); err == nil {
+			t.Fatal("foreign configuration acquired journal")
+		}
+	}
+	j.OwnerUID++
+	if err = journalCaller(Options{ConfigPath: path}, j); err == nil {
+		t.Fatal("changed owner acquired journal")
+	}
+}

@@ -147,3 +147,36 @@ func TestOwnedHelperCanceledReadReleasesOwnershipLock(t *testing.T) {
 		t.Fatal("canceled read held the owner lock")
 	}
 }
+
+func TestCaptureReadinessRequiresExactActiveOwnerAndClearsOnStop(t *testing.T) {
+	client, server := pair(t, true, true, true)
+	owner := strings.Repeat("c", 32)
+	ready := []byte(`{"ready":true,"device":"utun99"}`)
+	if w := ownerRequest(client, "POST", "/v1/vpn/capture-ready", owner, ready); w.Code != 409 {
+		t.Fatal("readiness accepted before packet session")
+	}
+	if w := ownerStart(client, server.Host.ID().String(), owner); w.Code != 200 {
+		t.Fatal(w.Body.String())
+	}
+	if w := ownerRequest(client, "POST", "/v1/vpn/capture-ready", strings.Repeat("d", 32), ready); w.Code != 409 {
+		t.Fatal("foreign readiness accepted")
+	}
+	if w := ownerRequest(client, "POST", "/v1/vpn/capture-ready", owner, []byte(`{"ready":true,"device":"en0"}`)); w.Code != 400 {
+		t.Fatal("physical device accepted")
+	}
+	if w := ownerRequest(client, "POST", "/v1/vpn/capture-ready", owner, ready); w.Code != 200 || !strings.Contains(w.Body.String(), `"capture_ready":true`) {
+		t.Fatal(w.Body.String())
+	}
+	if w := ownerRequest(client, "POST", "/v1/vpn/capture-ready", owner, []byte(`{"ready":false}`)); w.Code != 200 || !strings.Contains(w.Body.String(), `"capture_ready":false`) {
+		t.Fatal("cleanup did not clear capture")
+	}
+	if w := ownerRequest(client, "POST", "/v1/vpn/capture-ready", owner, ready); w.Code != 200 {
+		t.Fatal(w.Body.String())
+	}
+	if w := ownerRequest(client, "POST", "/v1/vpn/stop", owner, nil); w.Code != 200 {
+		t.Fatal(w.Body.String())
+	}
+	if client.vpnCaptureReady || client.vpnCaptureDevice != "" {
+		t.Fatal("stop retained native readiness")
+	}
+}

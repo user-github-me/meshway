@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"regexp"
 	"time"
 )
 
@@ -35,6 +36,46 @@ func (n *Node) packetAPIOwner(w http.ResponseWriter, r *http.Request) bool {
 
 func (n *Node) vpnAPI(w http.ResponseWriter, r *http.Request) bool {
 	switch r.URL.Path {
+	case "/v1/vpn/capture-ready":
+		if r.Method != "POST" {
+			apiError(w, 405, "method not allowed")
+			return true
+		}
+		var body struct {
+			Ready  bool   `json:"ready"`
+			Device string `json:"device"`
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, 1024)
+		decoder := json.NewDecoder(r.Body)
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&body); err != nil {
+			apiError(w, 400, "invalid capture readiness")
+			return true
+		}
+		var extra any
+		if err := decoder.Decode(&extra); err != io.EOF {
+			apiError(w, 400, "invalid capture readiness")
+			return true
+		}
+		n.vpnMu.Lock()
+		defer n.vpnMu.Unlock()
+		if !n.packetAPIOwner(w, r) {
+			return true
+		}
+		if n.vpnOwner == "" || n.vpn == nil || n.vpn.Status().PeerID == "" {
+			apiError(w, 409, "capture requires an owned packet session")
+			return true
+		}
+		if body.Ready && (!n.vpn.Status().Active || !regexp.MustCompile(`^utun[0-9]{1,5}$`).MatchString(body.Device)) {
+			apiError(w, 400, "capture device is invalid or peer inactive")
+			return true
+		}
+		n.vpnCaptureReady, n.vpnCaptureDevice = body.Ready, body.Device
+		if !body.Ready {
+			n.vpnCaptureDevice = ""
+		}
+		jsonResponse(w, 200, n.vpnStatusLocked())
+		return true
 	case "/v1/vpn/read":
 		if r.Method != "POST" {
 			apiError(w, 405, "method not allowed")
@@ -120,7 +161,7 @@ func (n *Node) vpnAPI(w http.ResponseWriter, r *http.Request) bool {
 			if !n.packetAPIOwner(w, r) {
 				return true
 			}
-			jsonResponse(w, 200, n.VPNStatus())
+			jsonResponse(w, 200, n.vpnStatusLocked())
 		}
 		return true
 	case "/v1/vpn/stop":
@@ -134,6 +175,7 @@ func (n *Node) vpnAPI(w http.ResponseWriter, r *http.Request) bool {
 			return true
 		}
 		n.vpnOwner = ""
+		n.vpnCaptureReady, n.vpnCaptureDevice = false, ""
 		if n.vpn == nil {
 			jsonResponse(w, 200, map[string]bool{"ok": true})
 			return true
@@ -195,6 +237,9 @@ func (n *Node) vpnAPI(w http.ResponseWriter, r *http.Request) bool {
 					p = n.UpstreamPeer()
 				}
 				n.vpnOwner = session
+				if n.vpn.Status().PeerID == "" {
+					n.vpnCaptureReady, n.vpnCaptureDevice = false, ""
+				}
 				err = n.vpn.StartPacketVPN(p)
 			} else {
 				if session != "" {
@@ -220,7 +265,7 @@ func (n *Node) vpnAPI(w http.ResponseWriter, r *http.Request) bool {
 			}
 			apiError(w, 400, err.Error())
 		} else {
-			jsonResponse(w, 200, n.VPNStatus())
+			jsonResponse(w, 200, n.vpnStatusLocked())
 		}
 		return true
 	default:

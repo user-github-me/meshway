@@ -3,6 +3,8 @@ package core
 import (
 	"context"
 	"errors"
+
+	"github.com/user-github-me/meshway/internal/vpn"
 )
 
 func (n *Node) StartPacketVPN(peerID string) error {
@@ -51,6 +53,7 @@ func (n *Node) StopPacketVPN() error {
 	n.vpnMu.Lock()
 	defer n.vpnMu.Unlock()
 	n.vpnOwner = ""
+	n.vpnCaptureReady, n.vpnCaptureDevice = false, ""
 	if n.vpn == nil {
 		return nil
 	}
@@ -85,8 +88,18 @@ func (n *Node) StartDeviceVPN(name, peerID string) error {
 	return n.vpn.StartDeviceExit(name, peerID)
 }
 func (n *Node) VPNStatus() any {
+	n.vpnMu.RLock()
+	defer n.vpnMu.RUnlock()
+	return n.vpnStatusLocked()
+}
+func (n *Node) vpnStatusLocked() any {
 	if n.vpn == nil {
 		return nil
 	}
-	return n.vpn.Status()
+	state := n.vpn.Status()
+	return struct {
+		vpn.Status
+		CaptureReady  bool   `json:"capture_ready"`
+		CaptureDevice string `json:"capture_device,omitempty"`
+	}{state, n.vpnCaptureReady && state.Active, n.vpnCaptureDevice}
 }

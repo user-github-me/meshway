@@ -28,7 +28,9 @@ def main():
     for path in candidates:
         if not path.is_file():continue
         data=path.read_bytes()
-        entries.append({'path':str(path),'size':len(data),'sha256':hashlib.sha256(data).hexdigest()})
+        # Stable distribution paths keep publisher home/staging directories
+        # out of public metadata when --dist uses an absolute private path.
+        entries.append({'path':str(Path('dist')/path.relative_to(args.dist)),'size':len(data),'sha256':hashlib.sha256(data).hexdigest()})
     result={'version':args.version,'release_type':'Experimental app builds without owner platform certificates; APK debug-signed; Wintun retains upstream vendor signature','artifacts':entries}
     args.output.parent.mkdir(parents=True,exist_ok=True)
     args.output.write_text(json.dumps(result,indent=2)+'\n')

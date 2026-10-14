@@ -20,7 +20,8 @@ def main():
     ap.add_argument('--app',type=Path,default=ROOT/'dist/apple-macos/Build/Products/Release/Meshway.app')
     ap.add_argument('--output',type=Path,default=ROOT/'.tools/release/installers/Meshway-macos.dmg')
     ap.add_argument('--version',default='0.1.0-alpha.2')
-    a=ap.parse_args();a.output.parent.mkdir(parents=True,exist_ok=True)
+    ap.add_argument('--proof',type=Path,default=ROOT/'artifacts/macos-dmg-validation.json',help='Explicit validation report path for isolated release staging')
+    a=ap.parse_args();a.app=a.app.resolve();a.output=a.output.resolve();a.proof=a.proof.resolve();a.output.parent.mkdir(parents=True,exist_ok=True)
     if not a.app.is_dir():raise RuntimeError('Tested native app missing')
     expected=files(a.app)
     for executable in ('Contents/MacOS/Meshway','Contents/Resources/meshway','Contents/PlugIns/MeshwayPacketTunnel.appex/Contents/MacOS/MeshwayPacketTunnel'):
@@ -43,10 +44,11 @@ def main():
             if os.readlink(mount/'Applications')!='/Applications':raise RuntimeError('Applications shortcut invalid')
             for name in ('LICENSE','THIRD_PARTY_NOTICES.txt'):
                 if (mount/name).read_bytes()!=(ROOT/name).read_bytes():raise RuntimeError('Notice differs')
-            result={'status':'PASS','artifact':str(a.output.relative_to(ROOT)),'bytes':a.output.stat().st_size,'sha256':hashlib.sha256(a.output.read_bytes()).hexdigest(),'mounted_app_exact_hashes':True,'universal_gui_and_daemon':True,'applications_shortcut':True,'license_notices':True,'host_network_modified':False,'limitation':'Unsigned experimental app. Apple Network Extension operation requires legitimate signing and entitlements; the separate administrator utun helper has not yet passed physical Mac route, resolver and failure-recovery qualification.'}
+            artifact=str(a.output.relative_to(ROOT)) if a.output.is_relative_to(ROOT) else str(a.output)
+            result={'status':'PASS','artifact':artifact,'bytes':a.output.stat().st_size,'sha256':hashlib.sha256(a.output.read_bytes()).hexdigest(),'mounted_app_exact_hashes':True,'universal_gui_and_daemon':True,'applications_shortcut':True,'license_notices':True,'host_network_modified':False,'limitation':'Unsigned experimental app. Apple Network Extension operation requires legitimate signing and entitlements; the separate administrator utun helper has not yet passed physical Mac route, resolver and failure-recovery qualification.'}
         finally:
             if devices:run(['/usr/bin/hdiutil','detach',devices[0]])
     result['mount_and_temporary_files_removed']=True
-    out=ROOT/'artifacts/macos-dmg-validation.json';out.write_text(json.dumps(result,indent=2)+'\n')
+    a.proof.parent.mkdir(parents=True,exist_ok=True);a.proof.write_text(json.dumps(result,indent=2)+'\n')
     print(json.dumps(result,indent=2))
 if __name__=='__main__':main()
