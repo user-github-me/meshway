@@ -5,9 +5,16 @@ import Security
 public enum NativeStateKey {
     private static let interactionLock = NSLock()
     public static func hasEntitlement(_ name: String, containing expected: String) -> Bool {
+        #if os(macOS)
         guard let task = SecTaskCreateFromSelf(nil),
               let values = SecTaskCopyValueForEntitlement(task, name as CFString, nil) as? [String] else { return false }
         return values.contains(expected)
+        #else
+        // iOS does not expose SecTask. The container API validates the app's
+        // signed app-group entitlement before returning its shared directory.
+        guard name == "com.apple.security.application-groups" else { return false }
+        return FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: expected) != nil
+        #endif
     }
 
     public static func loadOrCreate(allowInteraction: Bool = true) throws -> Data {
@@ -24,10 +31,18 @@ public enum NativeStateKey {
             kSecAttrSynchronizable: false,
         ]
         if let group = Bundle.main.object(forInfoDictionaryKey: "MeshwayKeychainAccessGroup") as? String,
-           !group.contains("$("),
-           hasEntitlement("keychain-access-groups", containing: group) {
+           !group.isEmpty, !group.contains("$(") {
+            #if os(macOS)
+            if hasEntitlement("keychain-access-groups", containing: group) {
+                query[kSecAttrAccessGroup] = group
+                query[kSecUseDataProtectionKeychain] = true
+            }
+            #else
+            // Security validates this access group against the signed iOS
+            // entitlements. Missing authorization must fail rather than create
+            // separate app/extension keys for the same shared node state.
             query[kSecAttrAccessGroup] = group
-            query[kSecUseDataProtectionKeychain] = true
+            #endif
         }
         var lookup = query
         if !allowInteraction { lookup[kSecUseAuthenticationUI] = kSecUseAuthenticationUIFail }

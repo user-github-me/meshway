@@ -18,14 +18,20 @@ case "$platform" in
   iossimulator) scheme=iOSApp; sdk=iphonesimulator ;;
   *) echo 'Usage: apps/apple/build.sh [macos|ios|iossimulator]' >&2; exit 2 ;;
 esac
-if ! command -v gomobile >/dev/null; then
-  GOBIN="$project_root/.tools/native/bin" go install golang.org/x/mobile/cmd/gomobile@v0.0.0-20261011034528-197770444867
-fi
-if ! command -v gobind >/dev/null; then
-  GOBIN="$project_root/.tools/native/bin" go install golang.org/x/mobile/cmd/gobind@v0.0.0-20261011034528-197770444867
-fi
-gomobile init
-if [ "${MESHWAY_REUSE_APPLE_CORE:-0}" != 1 ]; then
+if [ "${MESHWAY_REUSE_APPLE_CORE:-0}" = 1 ]; then
+  if [ ! -f dist/Meshway.xcframework/Info.plist ]; then
+    echo 'MESHWAY_REUSE_APPLE_CORE=1 requires an existing dist/Meshway.xcframework. Run a fresh Apple build first.' >&2
+    exit 1
+  fi
+else
+  if ! command -v gomobile >/dev/null; then
+    GOBIN="$project_root/.tools/native/bin" go install golang.org/x/mobile/cmd/gomobile@v0.0.0-20261011034528-197770444867
+  fi
+  if ! command -v gobind >/dev/null; then
+    GOBIN="$project_root/.tools/native/bin" go install golang.org/x/mobile/cmd/gobind@v0.0.0-20261011034528-197770444867
+  fi
+  # bind uses the pinned gobind installed above. gomobile init would fetch
+  # gobind@latest and introduce an unrelated network/module dependency.
   gomobile bind -ldflags='-checklinkname=0 -s -w' -target=ios,iossimulator,macos -iosversion=16.0 -macosversion=13.0 -o dist/Meshway.xcframework ./pkg/meshway
 fi
 python3 apps/apple/generate-project.py
