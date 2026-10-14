@@ -520,6 +520,12 @@ func (e systemExecutor) inspect(ctx context.Context, s step) (bool, error) {
 		if len(args) < 7 || args[0] != "-n" || args[1] != "add" || (args[2] != "-inet" && args[2] != "-inet6") || (args[3] != "-host" && args[3] != "-net") {
 			return false, errors.New("invalid journal route")
 		}
+		// Closing the original utun descriptor destroys its interface and
+		// interface-bound routes. A subsequently reused name belongs to a
+		// different process; no route probe or deletion may claim it.
+		if iface := argument(args, "-interface"); validDevice(iface) && e.liveDevice != iface {
+			return false, nil
+		}
 		marker, err := strconv.ParseUint(argument(args, "-hopcount"), 10, 32)
 		if err != nil || marker == 0 || uint32(marker) != e.marker {
 			return false, errors.New("invalid route ownership marker")

@@ -426,7 +426,7 @@ func TestRealDarwinDefaultHalfSpaceStillRequiresExactMaskMarkerAndDevice(t *test
 	s := step{Apply: command{Name: "/sbin/route", Args: []string{"-n", "add", "-inet", "-net", "0.0.0.0/1", "-interface", "utun4", "-proto1", "-proto2", "-hopcount", strconv.Itoa(marker)}}}
 	real := []byte("destination: default\n mask: 128.0.0.0\n interface: utun4\n flags: <UP,DONE,STATIC,PROTO2,PROTO1,PRCLONING,GLOBAL>\n recvpipe sendpipe ssthresh rtt,msec rttvar hopcount mtu expire\n 0 0 0 0 0 1971273528 1280 0\n")
 	p := &probeBackend{out: real}
-	e := systemExecutor{marker: marker, backend: p}
+	e := systemExecutor{marker: marker, backend: p, liveDevice: "utun4"}
 	if yes, err := e.inspect(context.Background(), s); err != nil || !yes {
 		t.Fatalf("actual Darwin /1 shape rejected: %v", err)
 	}
@@ -489,5 +489,22 @@ func TestDeadZombieCannotOwnMarkerOnlyStop(t *testing.T) {
 	}
 	if start := liveProcessStart([]byte("")); start != "" {
 		t.Fatal("missing process retained ownership")
+	}
+}
+
+func TestStaleUtunRouteStepsCannotClaimReusedInterface(t *testing.T) {
+	p := &probeBackend{err: context.DeadlineExceeded}
+	for _, target := range []string{"0.0.0.0/1", "128.0.0.0/1", "::/1", "8000::/1"} {
+		family := "-inet"
+		if strings.Contains(target, ":") {
+			family = "-inet6"
+		}
+		s := step{Apply: command{Name: "/sbin/route", Args: []string{"-n", "add", family, "-net", target, "-interface", "utun99", "-proto1", "-proto2", "-hopcount", "123"}}}
+		if owned, err := (systemExecutor{marker: 123, backend: p}).inspect(context.Background(), s); err != nil || owned {
+			t.Fatalf("stale interface route claimed: %v", err)
+		}
+	}
+	if len(p.calls) != 0 {
+		t.Fatal("stale reused interface routes were probed or mutated")
 	}
 }
