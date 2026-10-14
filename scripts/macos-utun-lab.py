@@ -254,7 +254,14 @@ def execute(args):
             if not cycle['default_routes_dns_proxy_restored']:raise RuntimeError('Actual Mac baseline was not restored after '+mode)
             status=json.loads(run(['/usr/bin/sudo','-n',BINARY,'vpn','status','--config',canonical(CONFIG)]).stdout)
             cycle['no_active_helper_or_cleanup_pending']=not status.get('running') and not status.get('network_cleanup_pending')
-            if not cycle['no_active_helper_or_cleanup_pending']:raise RuntimeError('Owned helper retained cleanup state.')
+            if not cycle['no_active_helper_or_cleanup_pending']:
+                cycle['cleanup_state']={key:status.get(key) for key in ['active','running','network_cleanup_pending']}
+                journal_probe=run(['/usr/bin/sudo','-n','/bin/cat',str(RUNTIME/'journal.json')],check=False)
+                try:
+                    retained=json.loads(journal_probe.stdout)
+                    cycle['cleanup_remaining_resources']=[{'command':pathlib.Path(item['apply']['name']).name,'kind':next((value for value in item['apply'].get('args',[]) if value in ['-host','-net','inet','inet6']),None)} for item in retained.get('steps',[])][:16]
+                except (ValueError,KeyError):pass
+                raise RuntimeError('Owned helper retained cleanup state.')
             proof['cycles'].append(cycle)
             cycle=None
             print(json.dumps({'cycle':mode,'status':'PASS'}),flush=True)

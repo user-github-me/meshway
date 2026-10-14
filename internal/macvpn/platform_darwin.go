@@ -221,13 +221,25 @@ func processOwner(pid int) (uint32, error) {
 	n, err := strconv.ParseUint(strings.TrimSpace(string(out)), 10, 32)
 	return uint32(n), err
 }
+
+// A zombie retains its PID/start time until its parent reaps it, but its utun
+// descriptor and worker are already gone. It must never receive marker-only
+// Stop or count as a live owning application.
+func liveProcessStart(out []byte) string {
+	fields := strings.Fields(string(out))
+	if len(fields) < 6 || strings.ContainsAny(fields[0], "ZX") {
+		return ""
+	}
+	return strings.Join(fields[1:], " ")
+}
 func processStart(pid int) string {
-	out, err := systemExecutor{}.execute(context.Background(), command{Name: "/bin/ps", Args: []string{"-p", strconv.Itoa(pid), "-o", "lstart="}})
+	out, err := systemExecutor{}.execute(context.Background(), command{Name: "/bin/ps", Args: []string{"-p", strconv.Itoa(pid), "-o", "stat=", "-o", "lstart="}})
 	if err != nil {
 		return ""
 	}
-	return strings.TrimSpace(string(out))
+	return liveProcessStart(out)
 }
+
 func readJournal(o Options) (journal, error) {
 	var j journal
 	fd, err := unix.Open(filepath.Join(runtimeDir(o), "journal.json"), unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC|unix.O_NONBLOCK, 0)

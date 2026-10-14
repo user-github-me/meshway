@@ -477,3 +477,17 @@ func TestEffectiveUnderlayLookupMustSurviveSplitRoutes(t *testing.T) {
 		t.Fatal("failed physical route probe accepted as ready")
 	}
 }
+
+func TestDeadZombieCannotOwnMarkerOnlyStop(t *testing.T) {
+	for _, state := range []string{"Z", "Z+", "ZX"} {
+		if start := liveProcessStart([]byte(state + " Wed Oct 14 19:49:21 2026\n")); start != "" {
+			t.Fatal("dead process retained live ownership")
+		}
+	}
+	if start := liveProcessStart([]byte("Ss+ Wed Oct 14 19:49:21 2026\n")); start != "Wed Oct 14 19:49:21 2026" {
+		t.Fatal("live process identity changed")
+	}
+	if start := liveProcessStart([]byte("")); start != "" {
+		t.Fatal("missing process retained ownership")
+	}
+}
