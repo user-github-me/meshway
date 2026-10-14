@@ -76,6 +76,8 @@ Configuration is JSON: identity/state directory; libp2p listen addresses; bootst
 - [x] CI published; actual core/web/browser/macOS/Android/Windows checks and isolated Linux privileged helper checks pass.
 - [x] Signed publisher metadata, native signing/notarization scripts, verified artifact packaging and release/Pages automation for the authorized repository.
 - [x] Record actual GitHub source/website/container publication and native/kernel CI evidence.
+- [x] Direct Windows x64/ARM64 EXE installers and universal macOS DMG; actual x64 install/uninstall and mounted DMG content checks pass.
+- [x] Public npm `@nazifbd/meshway` alpha package; anonymous download and temporary installation verified.
 - [ ] Publish the initial signed GitHub release and verify installation from its public downloads.
 - [ ] Legitimate owner-signed native/store releases and physical-device field gates.
 
