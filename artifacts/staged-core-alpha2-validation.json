@@ -1,0 +1,12 @@
+{
+  "status": "PASS",
+  "checked_at": "2026-10-14T18:24:02.115347+00:00",
+  "version": "0.1.0-alpha.2",
+  "binary_sha256": "4e5315705fba5dcd10eb61b3af7aeb382dd91b18b1e9b3708851b294d0faced8",
+  "loopback_api_authentication": true,
+  "no_false_peer_or_capture_ready": true,
+  "zero_idle_payload_counters": true,
+  "graceful_owned_shutdown": true,
+  "temporary_private_state_removed": true,
+  "host_network_modified": false
+}

@@ -22,6 +22,10 @@
 	<string>1</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>13.0</string>
+	<key>MeshwayAdministratorVPNQualified</key>
+	<true/>
+	<key>MeshwayAdministratorVPNValidation</key>
+	<string>https://github.com/user-github-me/meshway/blob/main/artifacts/macos-utun-public-validation.json</string>
 	<key>MeshwayKeychainAccessGroup</key>
 	<string>$(AppIdentifierPrefix)network.meshway.shared</string>
 	<key>NSHighResolutionCapable</key>

@@ -90,5 +90,26 @@
   "production_baseline_unchanged": true,
   "tests_changed_host_network": false,
   "scope": "macOS system SOCKS proxy for supported applications; device-wide TUN validation is separate",
-  "status": "PASS"
+  "status": "PASS",
+  "proxy_resume_update": {
+    "verified_at": "2026-10-14T18:21:14.136903+00:00",
+    "gui_sha256": "3fd375e98484fddf821faeaec1505be097e02434a9d0d5ba7dd659d782a86d6c",
+    "same_tested_core_retained": true,
+    "swift_tests_passed": 46,
+    "universal_xcode_build": true,
+    "fresh_brave_default_proxy_checks": {
+      "expected_exit_ip": true,
+      "dual_stack_exit_ip": true,
+      "browser_https": true,
+      "temporary_browser_closed": true,
+      "host_network_baseline_preserved": true
+    },
+    "previous_app_kept_for_rollback": true,
+    "dmg_mounted_exact_current_app": true,
+    "system_preferences_test_writes": false,
+    "scope": "Guarded own-journal resume and fresh default-proxy internet verification; full-device TUN stays runtime gated.",
+    "fresh_brave_default_proxy_checks_scope": "Current OS proxy and authenticated daemon path passed; app binary/process correlation must be rechecked after removing the older duplicate bundle.",
+    "gui_process_path_correlated": false
+  },
+  "final_build_live_gui_replacement": "Pending old duplicate app proxy restoration; prior default-proxy browser checks remain valid for the recorded daemon."
 }

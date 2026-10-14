@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { publicKey, verifyRelease } from './release.js';
 
-export const projectReleaseVersion = '0.1.0-alpha.1';
+export const projectReleaseVersion = '0.1.0-alpha.2';
 export const projectReleaseBase = `https://github.com/user-github-me/meshway/releases/download/v${projectReleaseVersion}/`;
 
 export function binaryName(platform = process.platform, arch = process.arch) {

@@ -18,6 +18,10 @@ publisher sequence 2; it must never replace public sequence-1 metadata. After
 publication, run `node scripts/validate-published-release.mjs 0.1.0-alpha.2 2`
 to verify an actual public install with the pinned publisher key.
 
+## Alpha.2
+
+The alpha.2 macOS administrator helper passed actual public DNS/HTTPS/exit-IP and three cleanup-mode tests; its separate Apple packet extension still requires developer provisioning. The universal ad-hoc-signed Mac app enables that qualified helper. Freeze exact native bundles, installer hashes, tracked-only source archives and final-revision container exports before signing publisher sequence 2. Alpha.1 files and sequence 1 remain immutable. Expected alpha.2 inventory is 35 signed payloads plus the metadata/signature; iPhone binaries and the old ARM64-only Mac fallback are excluded. Repack both npm launchers after changing their default core pin to alpha.2. Compare all draft asset hashes and sizes before publishing. Validate anonymous GitHub/npm installations and cached-tamper rejection after publication. Published metadata supplies the authoritative inventory and expiry.
+
 ## Publisher signatures and updates
 
 Meshway has an Ed25519 publisher public key in `config/release-public.pem`, also shipped in `packages/cli/release-public.pem`. The initial private key is in the ignored `.tools/release/publisher-private.pem` with mode 0600. Back it up securely outside this checkout before deleting development state. Never publish it, put it in an artifact directory, print it, or use an account recovery key as a release signing key. Authorized release automation stores it only as an encrypted GitHub environment secret, protected by owner review. A public release signature establishes publisher identity; it does not replace OS code signing or an independent security review.

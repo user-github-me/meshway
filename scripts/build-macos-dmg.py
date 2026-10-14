@@ -23,6 +23,7 @@ def main():
     ap.add_argument('--proof',type=Path,default=ROOT/'artifacts/macos-dmg-validation.json',help='Explicit validation report path for isolated release staging')
     a=ap.parse_args();a.app=a.app.resolve();a.output=a.output.resolve();a.proof=a.proof.resolve();a.output.parent.mkdir(parents=True,exist_ok=True)
     if not a.app.is_dir():raise RuntimeError('Tested native app missing')
+    qualified=plistlib.loads((a.app/'Contents/Info.plist').read_bytes()).get('MeshwayAdministratorVPNQualified') is True
     expected=files(a.app)
     for executable in ('Contents/MacOS/Meshway','Contents/Resources/meshway','Contents/PlugIns/MeshwayPacketTunnel.appex/Contents/MacOS/MeshwayPacketTunnel'):
         if set(run(['/usr/bin/lipo','-archs',str(a.app/executable)]).decode().split())!={'x86_64','arm64'}:raise RuntimeError('Universal app/core required')
@@ -33,7 +34,8 @@ def main():
         os.symlink('/Applications',staging/'Applications')
         shutil.copy2(ROOT/'LICENSE',staging/'LICENSE')
         shutil.copy2(ROOT/'THIRD_PARTY_NOTICES.txt',staging/'THIRD_PARTY_NOTICES.txt')
-        (staging/'READ ME.txt').write_text(f'Meshway {a.version}\n\nDrag Meshway.app to Applications, then choose a server and Connect. SOCKS and personal SSH tunnels work without Apple VPN signing. System proxy is an optional explicit setting for supported applications.\nThis is an unsigned experimental build. The Apple Network Extension requires legitimate Apple Developer signing and entitlements. A separate administrator utun helper is being qualified; its source and isolated tests do not establish working full-device VPN on a physical Mac.\nSource and build instructions: https://github.com/user-github-me/meshway\n')
+        vpn_note=('Internet VPN uses the administrator utun helper, tested with native DNS, public HTTPS, exit-IP checks and three cleanup modes on disposable hosted Macs. Approve macOS network authorization to connect. Disconnect restores Meshway-owned changes. Physical sleep/wake and persistent crash leak protection remain separate checks.' if qualified else 'Internet VPN is unavailable through the administrator helper in this build; its qualification marker is absent.')
+        (staging/'READ ME.txt').write_text(f'Meshway {a.version}\n\nDrag Meshway.app to Applications, then choose a server and Connect. For all-device traffic choose Internet VPN. For supported apps choose SOCKS or Personal tunnel and enable System proxy.\n{vpn_note}\nThis is an experimental ad-hoc-signed build without Apple notarization. macOS may require approval in Privacy & Security after you try opening it. The separate Apple Network Extension requires legitimate Apple Developer signing and entitlements.\nSource and build instructions: https://github.com/user-github-me/meshway\n')
         a.output.unlink(missing_ok=True)
         run(['/usr/bin/hdiutil','create','-volname','Meshway','-srcfolder',str(staging),'-format','UDZO','-ov',str(a.output)])
         try:
@@ -45,7 +47,7 @@ def main():
             for name in ('LICENSE','THIRD_PARTY_NOTICES.txt'):
                 if (mount/name).read_bytes()!=(ROOT/name).read_bytes():raise RuntimeError('Notice differs')
             artifact=str(a.output.relative_to(ROOT)) if a.output.is_relative_to(ROOT) else str(a.output)
-            result={'status':'PASS','artifact':artifact,'bytes':a.output.stat().st_size,'sha256':hashlib.sha256(a.output.read_bytes()).hexdigest(),'mounted_app_exact_hashes':True,'universal_gui_and_daemon':True,'applications_shortcut':True,'license_notices':True,'host_network_modified':False,'limitation':'Unsigned experimental app. Apple Network Extension operation requires legitimate signing and entitlements; the separate administrator utun helper has not yet passed physical Mac route, resolver and failure-recovery qualification.'}
+            result={'status':'PASS','artifact':artifact,'bytes':a.output.stat().st_size,'sha256':hashlib.sha256(a.output.read_bytes()).hexdigest(),'mounted_app_exact_hashes':True,'universal_gui_and_daemon':True,'administrator_vpn_qualified_marker':qualified,'applications_shortcut':True,'license_notices':True,'host_network_modified':False,'limitation':'Experimental ad-hoc-signed app without Apple notarization. Administrator VPN passed disposable hosted kernel/public internet and cleanup tests; physical sleep/wake and persistent crash containment remain separate. Apple Network Extension requires legitimate signing and entitlements.'}
         finally:
             if devices:run(['/usr/bin/hdiutil','detach',devices[0]])
     result['mount_and_temporary_files_removed']=True

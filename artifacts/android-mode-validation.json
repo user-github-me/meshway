@@ -1,9 +1,9 @@
 {
   "status": "PASS",
-  "checked_at": "2026-10-14T14:38:32.912211+00:00",
+  "checked_at": "2026-10-14T18:25:59.647344+00:00",
   "platform": "Android35ARM64emulator",
   "version": "0.1.0-alpha.2",
-  "apk_sha256": "e2636a228bda9c8b401646a56033bdad43680ceb66d81213215bebe9d568fce4",
+  "apk_sha256": "fa3bb09482ef2ad712e2ccc2745d988525b352a5d40e67afda75845e946a39ca",
   "visible_modes": [
     "VPN",
     "SOCKS",
