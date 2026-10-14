@@ -400,7 +400,7 @@ func TestJournalCallerRejectsAnotherConfigurationWithoutTouchingSession(t *testi
 	if err = config.Save(other, c, false); err != nil {
 		t.Fatal(err)
 	}
-	j := journal{ConfigPath: path, OwnerUID: uint32(os.Getuid()), SessionID: strings.Repeat("a", 32)}
+	j := journal{ConfigPath: path, OwnerUID: uint32(os.Getuid()), SessionID: strings.Repeat("a", 32), CaptureInstance: strings.Repeat("b", 32)}
 	if err = journalCaller(Options{ConfigPath: path}, j); err != nil {
 		t.Fatal(err)
 	}
@@ -409,8 +409,31 @@ func TestJournalCallerRejectsAnotherConfigurationWithoutTouchingSession(t *testi
 			t.Fatal("foreign configuration acquired journal")
 		}
 	}
+	if err = journalCaller(Options{ConfigPath: path, CaptureInstance: j.CaptureInstance}, j); err != nil {
+		t.Fatal("original capture instance rejected")
+	}
+	if err = journalCaller(Options{ConfigPath: path, CaptureInstance: strings.Repeat("c", 32)}, j); err == nil {
+		t.Fatal("same-configuration foreign capture instance acquired journal")
+	}
 	j.OwnerUID++
 	if err = journalCaller(Options{ConfigPath: path}, j); err == nil {
 		t.Fatal("changed owner acquired journal")
+	}
+}
+
+func TestRealDarwinDefaultHalfSpaceStillRequiresExactMaskMarkerAndDevice(t *testing.T) {
+	const marker = 1971273528
+	s := step{Apply: command{Name: "/sbin/route", Args: []string{"-n", "add", "-inet", "-net", "0.0.0.0/1", "-interface", "utun4", "-proto1", "-proto2", "-hopcount", strconv.Itoa(marker)}}}
+	real := []byte("destination: default\n mask: 128.0.0.0\n interface: utun4\n flags: <UP,DONE,STATIC,PROTO2,PROTO1,PRCLONING,GLOBAL>\n recvpipe sendpipe ssthresh rtt,msec rttvar hopcount mtu expire\n 0 0 0 0 0 1971273528 1280 0\n")
+	p := &probeBackend{out: real}
+	e := systemExecutor{marker: marker, backend: p}
+	if yes, err := e.inspect(context.Background(), s); err != nil || !yes {
+		t.Fatalf("actual Darwin /1 shape rejected: %v", err)
+	}
+	for _, bad := range []string{strings.Replace(string(real), "128.0.0.0", "0.0.0.0", 1), strings.Replace(string(real), "utun4", "en0", 1), strings.Replace(string(real), "1971273528", "1971273529", 1)} {
+		p.out = []byte(bad)
+		if yes, err := e.inspect(context.Background(), s); err != nil || yes {
+			t.Fatal("foreign /0 or replaced route accepted")
+		}
 	}
 }

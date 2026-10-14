@@ -32,17 +32,18 @@ import (
 const runtimeDefault = "/private/var/db/meshway-macvpn"
 
 type journal struct {
-	Version      int    `json:"version"`
-	PID          int    `json:"pid"`
-	ProcessStart string `json:"process_start"`
-	Device       string `json:"device"`
-	PeerID       string `json:"peer_id"`
-	Active       bool   `json:"active"`
-	Steps        []step `json:"steps"`
-	Marker       uint32 `json:"marker"`
-	SessionID    string `json:"session_id"`
-	ConfigPath   string `json:"config_path"`
-	OwnerUID     uint32 `json:"owner_uid"`
+	Version         int    `json:"version"`
+	PID             int    `json:"pid"`
+	ProcessStart    string `json:"process_start"`
+	Device          string `json:"device"`
+	PeerID          string `json:"peer_id"`
+	Active          bool   `json:"active"`
+	Steps           []step `json:"steps"`
+	Marker          uint32 `json:"marker"`
+	SessionID       string `json:"session_id"`
+	ConfigPath      string `json:"config_path"`
+	OwnerUID        uint32 `json:"owner_uid"`
+	CaptureInstance string `json:"capture_instance,omitempty"`
 }
 type systemExecutor struct {
 	liveDevice string
@@ -320,6 +321,9 @@ func journalCaller(o Options, j journal) error {
 	if uid != j.OwnerUID {
 		return errors.New("VPN recovery configuration owner changed")
 	}
+	if o.CaptureInstance != "" && (!validSessionID(o.CaptureInstance) || o.CaptureInstance != j.CaptureInstance) {
+		return errors.New("VPN recovery belongs to a different capture instance")
+	}
 	return nil
 }
 
@@ -519,7 +523,18 @@ func (e systemExecutor) inspect(ctx context.Context, s step) (bool, error) {
 			return false, errors.New("unexpected route ownership probe")
 		}
 		target := strings.Split(args[4], "/")[0]
-		if r.Destination != target {
+		destination := r.Destination
+		// route-get names the zero half-space "default" even when its mask
+		// is /1. Marker, exact mask and interface still distinguish it from
+		// the system /0 default; no broader route is accepted as our own.
+		if destination == "default" && args[3] == "-net" {
+			if args[2] == "-inet" {
+				destination = "0.0.0.0"
+			} else {
+				destination = "::"
+			}
+		}
+		if destination != target {
 			return false, nil
 		}
 		if args[3] == "-host" && !strings.Contains(r.Flags, "HOST") {
@@ -810,7 +825,14 @@ func Run(ctx context.Context, o Options) (result error) {
 	if marker == 0 {
 		marker = 1
 	}
-	j := journal{Version: 3, PID: os.Getpid(), ProcessStart: processStart(os.Getpid()), Device: name, PeerID: o.PeerID, Marker: marker, SessionID: api.session, ConfigPath: o.ConfigPath, OwnerUID: ownerUID}
+	instance := o.CaptureInstance
+	if instance == "" {
+		instance = hex.EncodeToString(id) + hex.EncodeToString(id[:4])
+	}
+	if !validSessionID(instance) {
+		return errors.New("capture readiness instance must have 32 hex characters")
+	}
+	j := journal{Version: 3, PID: os.Getpid(), ProcessStart: processStart(os.Getpid()), Device: name, PeerID: o.PeerID, Marker: marker, SessionID: api.session, ConfigPath: o.ConfigPath, OwnerUID: ownerUID, CaptureInstance: instance}
 	e.liveDevice, e.marker = name, marker
 	if err = saveJournal(o, j); err != nil {
 		return err
@@ -867,7 +889,7 @@ func Run(ctx context.Context, o Options) (result error) {
 	if err = saveJournal(o, j); err != nil {
 		return err
 	}
-	readyPayload, _ := json.Marshal(map[string]any{"ready": true, "device": name})
+	readyPayload, _ := json.Marshal(map[string]any{"ready": true, "device": name, "instance": instance})
 	if _, _, err = api.request(ctx, "/v1/vpn/capture-ready", readyPayload, "application/json"); err != nil {
 		return errors.New("daemon could not confirm verified device capture")
 	}

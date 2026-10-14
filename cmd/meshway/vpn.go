@@ -31,6 +31,7 @@ func vpnCommand(args []string) error {
 	peer := flags.String("peer", "", "selected Meshway peer ID for macOS device VPN")
 	underlays := flags.String("underlay-ips", "", "comma-separated resolved physical transport IPs for macOS")
 	parent := flags.Int("parent-pid", 0, "owning macOS app process; helper restores networking if it exits")
+	instance := flags.String("capture-instance", "", "public opaque macOS capture readiness instance")
 	if err = flags.Parse(args[1:]); err != nil {
 		return err
 	}
@@ -46,7 +47,7 @@ func vpnCommand(args []string) error {
 		if *underlays != "" {
 			ips = strings.Split(*underlays, ",")
 		}
-		options := macvpn.Options{ConfigPath: path, PeerID: *peer, UnderlayIPs: ips, ParentPID: *parent}
+		options := macvpn.Options{ConfigPath: path, PeerID: *peer, UnderlayIPs: ips, ParentPID: *parent, CaptureInstance: *instance}
 		switch args[0] {
 		case "start":
 			ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

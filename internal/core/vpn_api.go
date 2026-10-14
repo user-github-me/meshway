@@ -42,8 +42,9 @@ func (n *Node) vpnAPI(w http.ResponseWriter, r *http.Request) bool {
 			return true
 		}
 		var body struct {
-			Ready  bool   `json:"ready"`
-			Device string `json:"device"`
+			Ready    bool   `json:"ready"`
+			Device   string `json:"device"`
+			Instance string `json:"instance"`
 		}
 		r.Body = http.MaxBytesReader(w, r.Body, 1024)
 		decoder := json.NewDecoder(r.Body)
@@ -66,13 +67,15 @@ func (n *Node) vpnAPI(w http.ResponseWriter, r *http.Request) bool {
 			apiError(w, 409, "capture requires an owned packet session")
 			return true
 		}
-		if body.Ready && (!n.vpn.Status().Active || !regexp.MustCompile(`^utun[0-9]{1,5}$`).MatchString(body.Device)) {
+		if body.Ready && (!n.vpn.Status().Active || !regexp.MustCompile(`^utun[0-9]{1,5}$`).MatchString(body.Device) || body.Instance == "" || !validVPNSession(body.Instance)) {
 			apiError(w, 400, "capture device is invalid or peer inactive")
 			return true
 		}
 		n.vpnCaptureReady, n.vpnCaptureDevice = body.Ready, body.Device
+		n.vpnCaptureInstance = body.Instance
 		if !body.Ready {
 			n.vpnCaptureDevice = ""
+			n.vpnCaptureInstance = ""
 		}
 		jsonResponse(w, 200, n.vpnStatusLocked())
 		return true
@@ -176,6 +179,7 @@ func (n *Node) vpnAPI(w http.ResponseWriter, r *http.Request) bool {
 		}
 		n.vpnOwner = ""
 		n.vpnCaptureReady, n.vpnCaptureDevice = false, ""
+		n.vpnCaptureInstance = ""
 		if n.vpn == nil {
 			jsonResponse(w, 200, map[string]bool{"ok": true})
 			return true
@@ -239,6 +243,7 @@ func (n *Node) vpnAPI(w http.ResponseWriter, r *http.Request) bool {
 				n.vpnOwner = session
 				if n.vpn.Status().PeerID == "" {
 					n.vpnCaptureReady, n.vpnCaptureDevice = false, ""
+					n.vpnCaptureInstance = ""
 				}
 				err = n.vpn.StartPacketVPN(p)
 			} else {

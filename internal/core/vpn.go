@@ -54,6 +54,7 @@ func (n *Node) StopPacketVPN() error {
 	defer n.vpnMu.Unlock()
 	n.vpnOwner = ""
 	n.vpnCaptureReady, n.vpnCaptureDevice = false, ""
+	n.vpnCaptureInstance = ""
 	if n.vpn == nil {
 		return nil
 	}
@@ -99,7 +100,8 @@ func (n *Node) vpnStatusLocked() any {
 	state := n.vpn.Status()
 	return struct {
 		vpn.Status
-		CaptureReady  bool   `json:"capture_ready"`
-		CaptureDevice string `json:"capture_device,omitempty"`
-	}{state, n.vpnCaptureReady && state.Active, n.vpnCaptureDevice}
+		CaptureReady    bool   `json:"capture_ready"`
+		CaptureDevice   string `json:"capture_device,omitempty"`
+		CaptureInstance string `json:"capture_instance,omitempty"`
+	}{state, n.vpnCaptureReady && state.Active, n.vpnCaptureDevice, n.vpnCaptureInstance}
 }

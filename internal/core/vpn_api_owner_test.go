@@ -151,7 +151,7 @@ func TestOwnedHelperCanceledReadReleasesOwnershipLock(t *testing.T) {
 func TestCaptureReadinessRequiresExactActiveOwnerAndClearsOnStop(t *testing.T) {
 	client, server := pair(t, true, true, true)
 	owner := strings.Repeat("c", 32)
-	ready := []byte(`{"ready":true,"device":"utun99"}`)
+	ready := []byte(`{"ready":true,"device":"utun99","instance":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"}`)
 	if w := ownerRequest(client, "POST", "/v1/vpn/capture-ready", owner, ready); w.Code != 409 {
 		t.Fatal("readiness accepted before packet session")
 	}

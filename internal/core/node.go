@@ -32,41 +32,42 @@ import (
 const Version = "0.1.0-alpha.2"
 
 type Node struct {
-	preferencesMu    sync.Mutex
-	bandwidthMu      sync.Mutex
-	bandwidthLimits  map[peer.ID]*rate.Limiter
-	Config           config.Config
-	Host             host.Host
-	ctx              context.Context
-	cancel           context.CancelFunc
-	started          time.Time
-	mu               sync.Mutex
-	listeners        []net.Listener
-	connections      map[net.Conn]struct{}
-	server           *http.Server
-	relay            *relay.Relay
-	vpn              *vpn.Service
-	vpnMu            sync.RWMutex
-	vpnOwner         string
-	vpnCaptureReady  bool
-	vpnCaptureDevice string
-	Account          *account.Store
-	stateLock        *state.Lock
-	Discovery        *discovery.Service
-	stopOnce         sync.Once
-	stopErr          error
-	done             chan struct{}
-	bytesSent        atomic.Uint64
-	bytesReceived    atomic.Uint64
-	proxyFailures    atomic.Uint64
-	proxyLastError   string
-	sessions         chan struct{}
-	socksAddress     string
-	apiAddress       string
-	upstreamPeer     string
-	outbound         map[network.Stream]struct{}
-	tunnelGeneration uint64
-	personalSSH      *transportssh.Manager
+	preferencesMu      sync.Mutex
+	bandwidthMu        sync.Mutex
+	bandwidthLimits    map[peer.ID]*rate.Limiter
+	Config             config.Config
+	Host               host.Host
+	ctx                context.Context
+	cancel             context.CancelFunc
+	started            time.Time
+	mu                 sync.Mutex
+	listeners          []net.Listener
+	connections        map[net.Conn]struct{}
+	server             *http.Server
+	relay              *relay.Relay
+	vpn                *vpn.Service
+	vpnMu              sync.RWMutex
+	vpnOwner           string
+	vpnCaptureReady    bool
+	vpnCaptureDevice   string
+	vpnCaptureInstance string
+	Account            *account.Store
+	stateLock          *state.Lock
+	Discovery          *discovery.Service
+	stopOnce           sync.Once
+	stopErr            error
+	done               chan struct{}
+	bytesSent          atomic.Uint64
+	bytesReceived      atomic.Uint64
+	proxyFailures      atomic.Uint64
+	proxyLastError     string
+	sessions           chan struct{}
+	socksAddress       string
+	apiAddress         string
+	upstreamPeer       string
+	outbound           map[network.Stream]struct{}
+	tunnelGeneration   uint64
+	personalSSH        *transportssh.Manager
 }
 
 type PeerInfo struct {

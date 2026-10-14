@@ -12,11 +12,12 @@ import (
 )
 
 type Options struct {
-	ConfigPath  string
-	PeerID      string
-	UnderlayIPs []string
-	ParentPID   int
-	RuntimeDir  string
+	ConfigPath      string
+	PeerID          string
+	UnderlayIPs     []string
+	ParentPID       int
+	RuntimeDir      string
+	CaptureInstance string
 }
 
 func decodeFrame(frame []byte, mtu int) ([]byte, error) {
