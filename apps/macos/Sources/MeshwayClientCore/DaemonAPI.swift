@@ -22,6 +22,17 @@ public struct DaemonStatus: Codable, Sendable {
     public let started_at: String
     public let bytes_sent: UInt64
     public let bytes_received: UInt64
+    public let transport: TransportStatus?
+    public struct TransportStatus: Codable, Sendable {
+        public let kind: String
+        public let configured: Bool
+        public let running: Bool
+        public let ready: Bool
+        public let authenticated: Bool
+        public let local_address: String?
+        public let peer_id: String?
+        public let error: String?
+    }
 }
 
 public struct Server: Codable, Sendable, Identifiable {
@@ -34,6 +45,7 @@ public struct Server: Codable, Sendable, Identifiable {
     public let roles: DaemonStatus.Roles
     public let available: Bool
     public let can_connect: Bool
+    public let personal: Bool?
 }
 
 public struct DaemonAPI: Sendable {

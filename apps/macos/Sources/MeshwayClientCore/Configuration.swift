@@ -29,6 +29,11 @@ public struct Configuration: Sendable {
     public var allowPrivateTargets: Bool
     public var personalServer: Bool
     public var advertiseServer: Bool
+    public var personalTransportEnabled: Bool
+    public var sshAlias: String
+    public var sshLocalPort: Int
+    public var sshRemotePort: Int
+    public var sshPeerID: String
 
     public init(data: Data) throws {
         guard let dictionary = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -47,6 +52,12 @@ public struct Configuration: Sendable {
         allowPrivateTargets = dictionary["allow_private_targets"] as? Bool ?? false
         personalServer = dictionary["personal_server"] as? Bool ?? false
         advertiseServer = dictionary["advertise"] as? Bool ?? false
+        let transport = dictionary["personal_transport"] as? [String: Any] ?? [:]
+        personalTransportEnabled = transport["kind"] as? String == "ssh"
+        sshAlias = transport["ssh_alias"] as? String ?? ""
+        sshLocalPort = transport["local_port"] as? Int ?? 44001
+        sshRemotePort = transport["remote_port"] as? Int ?? 44001
+        sshPeerID = transport["peer_id"] as? String ?? ""
         try validate()
     }
 
@@ -75,6 +86,13 @@ public struct Configuration: Sendable {
         _ = try apiBaseURL()
         guard socksListen.isEmpty || Self.loopbackURL(socksListen) != nil else {
             throw ClientError.invalidConfiguration("The SOCKS listener must be a loopback host and valid port, or empty to disable it.")
+        }
+        if personalTransportEnabled {
+            guard !sshAlias.isEmpty, sshAlias.count <= 128, !sshAlias.hasPrefix("-"),
+                  sshAlias.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || "._-".contains($0)) }),
+                  (1...65535).contains(sshLocalPort), (1...65535).contains(sshRemotePort), !sshPeerID.isEmpty else {
+                throw ClientError.invalidConfiguration("Personal SSH transport needs a saved SSH alias, valid local/remote ports and pinned Meshway peer ID.")
+            }
         }
         guard !allowPrivateTargets || exit else {
             throw ClientError.invalidConfiguration("Private destination forwarding requires the internet exit role.")
@@ -112,6 +130,9 @@ public struct Configuration: Sendable {
         object["allow_private_targets"] = allowPrivateTargets
         object["personal_server"] = personalServer
         object["advertise"] = advertiseServer
+        if personalTransportEnabled {
+            object["personal_transport"] = ["kind": "ssh", "ssh_alias": sshAlias, "local_port": sshLocalPort, "remote_port": sshRemotePort, "peer_id": sshPeerID]
+        } else { object.removeValue(forKey: "personal_transport") }
         return try JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys])
     }
 

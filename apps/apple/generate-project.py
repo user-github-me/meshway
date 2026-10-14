@@ -16,7 +16,7 @@ def phase(target, kind, files, extra=''):
     for path, typ in files:
         file=ref(path,typ)
         entries.append(add('build:'+target+':'+kind+':'+path, '{isa = PBXBuildFile; fileRef = '+file+'; '+('settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy);};' if kind=='embed' else '')+'}'))
-    return add('phase:'+target+':'+kind, '{isa = '+('PBXCopyFilesBuildPhase' if kind=='embed' else 'PBXSourcesBuildPhase' if kind=='sources' else 'PBXFrameworksBuildPhase')+'; buildActionMask = 2147483647; files = ('+','.join(entries)+'); runOnlyForDeploymentPostprocessing = 0; '+extra+'}')
+    return add('phase:'+target+':'+kind, '{isa = '+('PBXCopyFilesBuildPhase' if kind=='embed' else 'PBXSourcesBuildPhase' if kind=='sources' else 'PBXResourcesBuildPhase' if kind=='resources' else 'PBXFrameworksBuildPhase')+'; buildActionMask = 2147483647; files = ('+','.join(entries)+'); runOnlyForDeploymentPostprocessing = 0; '+extra+'}')
 core=[('../macos/Sources/MeshwayClientCore/'+p.name,'sourcecode.swift') for p in Path(__file__).parent.parent.joinpath('macos/Sources/MeshwayClientCore').glob('*.swift')]
 framework=('../../dist/Meshway.xcframework','wrapper.xcframework')
 products=[];targets=[]
@@ -31,6 +31,7 @@ for platform,sdk in [('macOS','macosx'),('iOS','iphoneos')]:
         else:sources=[('../ios/Sources/MeshwayIOSApp.swift','sourcecode.swift'),('../macos/Sources/MeshwayClientCore/AppleVPNController.swift','sourcecode.swift'),('../macos/Sources/MeshwayClientCore/NativeStateKey.swift','sourcecode.swift'),('../macos/Sources/MeshwayClientCore/Configuration.swift','sourcecode.swift')]
         phases=[phase(target,'sources',sources),phase(target,'frameworks',[framework] if provider or platform=='iOS' else [])]
         if not provider:
+            if platform=='macOS': phases.append(phase(target,'resources',[('Config/Meshway.icns','image.icns')]))
             # Use the extension's existing product file reference.
             embed=add('embed:'+target,'{isa = PBXBuildFile; fileRef = '+uid('product:'+tunnel)+'; settings = {ATTRIBUTES = (RemoveHeadersOnCopy,);};}')
             phases.append(add('embedphase:'+target,'{isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 13; files = ('+embed+'); name = "Embed Packet Tunnel"; runOnlyForDeploymentPostprocessing = 0;}'))

@@ -1,0 +1,34 @@
+{
+  "date": "2026-10-14T11:22:34.506081+00:00",
+  "platform": "macOS arm64",
+  "scope": "utun framing and descriptor lifecycle; no real utun creation or host networking changes",
+  "checks": {
+    "race_socket_packet_io": true,
+    "descriptor_nonblocking_close_on_exec": true,
+    "reader_cancellation_preserves_descriptor": true,
+    "backpressured_writer_cancellation": true,
+    "blocked_reader_close": true,
+    "ipv4_ipv6_frame_roundtrip": true,
+    "invalid_family_length_mtu_rejection": true,
+    "framing_fuzz": {
+      "passed": true,
+      "duration_seconds": 3,
+      "executions": 128035
+    }
+  },
+  "race_command": "go test -race internal/macvpn/options.go internal/macvpn/options_test.go internal/macvpn/framing_test.go internal/macvpn/utun_darwin.go internal/macvpn/utun_darwin_test.go",
+  "race_result": "PASS 1.626s",
+  "production_routes_dns_proxy_modified": false,
+  "actual_utun_routing_qualified": false,
+  "source_sha256": {
+    "internal/macvpn/utun_darwin.go": "e974b40ada93a349a1b1f32ecf542dfcce0f41a66f3e3b793ea03685c6abf889",
+    "internal/macvpn/utun_darwin_test.go": "2c6c27c2b9a4ae5bccbeea6bda9cc79e3e52ea8f9ee3006dcc3d33c6709f9fd3",
+    "internal/macvpn/framing_test.go": "65c8c4b33ff769f530e7f621132c8726996ffded636ce0fd48883aaa61da9ff2"
+  },
+  "independent_final_integration_check": {
+    "command": "go test -race ./internal/macvpn ./internal/core -run 'Test.*(VPN|Packet|PrivateConfiguration|Transaction|Cleanup|Route|UTUN|Resolver)'",
+    "macvpn": "PASS1.716s",
+    "core": "PASS5.463s",
+    "scope": "Packet session ownership, descriptor lifecycle, fake transaction/route/DNS probes and private-file validation; actual macOS route installation not performed"
+  }
+}

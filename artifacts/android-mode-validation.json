@@ -1,0 +1,20 @@
+{
+  "status": "PASS",
+  "checked_at": "2026-10-14T14:38:32.912211+00:00",
+  "platform": "Android35ARM64emulator",
+  "version": "0.1.0-alpha.2",
+  "apk_sha256": "e2636a228bda9c8b401646a56033bdad43680ceb66d81213215bebe9d568fce4",
+  "visible_modes": [
+    "VPN",
+    "SOCKS",
+    "Personal tunnel"
+  ],
+  "personal_capture_option": true,
+  "ssh_unavailable_disclosed": true,
+  "advanced_service_tools_hidden": true,
+  "socks_node_start_stop": true,
+  "live_proxy_counters": true,
+  "device_vpn_not_started": true,
+  "emulator_routes_unchanged": true,
+  "host_network_settings_changed": false
+}

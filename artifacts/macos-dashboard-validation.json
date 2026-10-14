@@ -1,0 +1,104 @@
+{
+  "status": "PASS",
+  "swift_tests_passed": 33,
+  "swift_tests_skipped": 0,
+  "universal_xcode_build": true,
+  "real_managed_ssh_authenticated": true,
+  "certificate_verified_https_via_personal_socks": true,
+  "button_edge_clicks": {
+    "main_connect": 2,
+    "mode_card": 2,
+    "sidebar_row": 2,
+    "method": "Owned NSHostingView with production FullCardButtonStyle; local NSEvent dispatch"
+  },
+  "system_proxy_runtime": "Current user-authorized native app completed exact proxy restoration, daemon update and re-enable. Fresh default Brave and Chrome passed three simultaneous browser pairs: all six checks matched the personal VPS for IPv4 and dual-stack IP endpoints and trusted HTTPS. Tests only read already-authorized host proxy settings; no routes or DNS changes.",
+  "screenshot": "Owned native Meshway and native network-authorization windows captured privately; screenshots are excluded from Git.",
+  "host_routes_dns_proxy_modified_by_tests": false,
+  "connection_claim": "Peer ready while proxy off; supported-app internet only after macOS URLSession HTTPS, observed daemon payload, and valid public exit-IP response",
+  "dock_icon": {
+    "exact_logo_rgb": {
+      "lime": [
+        211,
+        255,
+        115
+      ],
+      "purple": [
+        33,
+        24,
+        47
+      ]
+    },
+    "sizes": [
+      16,
+      32,
+      64,
+      128,
+      256,
+      512,
+      1024
+    ],
+    "resource": "apps/apple/Config/Meshway.icns"
+  },
+  "native_startup": {
+    "initial_issue": "Legacy macOS Keychain ACL authorization blocked MainActor after changed ad-hoc build identity",
+    "fixed": "Own-item query runs off MainActor; process-local noninteractive UI suppression returns explicit storage-permission-required state",
+    "actual_verified": "Current GUI71029 completed user network-preferences authorization and exact own-Keychain access, preserved the account, launched its owned daemon73651, and reports busy=false/daemon_running. The actual native macOS-proxy HTTPS and public exit-IP checks passed.",
+    "limitation": "User must approve exact Meshway storage item for the current build; no arbitrary Keychain ACL changes"
+  },
+  "real_managed_ssh_authenticated_scope": "Current GUI71029 owns daemon73651; same recovery account and pinned managed SSH authenticated. Private proof records exact app/core hashes and measured exit IP.",
+  "browser_default_proxy": {
+    "fresh_brave": "PASS: all three simultaneous browser pairs",
+    "sequential_chrome": "PASS: prior sequential checks",
+    "concurrent_chrome": "PASS: all three simultaneous Chrome+Brave pairs after personal-auth single-flight and bounded30-second peer-response repairs",
+    "host_proxy_test_activation": "User explicitly authorized normal production app action; browser checks read settings only"
+  },
+  "preferences_lock_runtime": {
+    "issue": "Privileged SystemConfiguration calls wait for native macOS authorization, including when lock contention is nonblocking. A real SecurityAgent prompt was captured privately and the user completed it.",
+    "status": "Current native transaction completed; bounded owned-worker source under implementation",
+    "working_listener_preserved_during_update": true,
+    "host_routes_or_dns_changed": false
+  },
+  "current_bundle": {
+    "gui_sha256": "db4ecf346205eb8f61a4db550ff10eb8b3f62da0dfd5971e2df023a038d1989c",
+    "universal_daemon_sha256": "045c4cfaf742392cb00b2d4cf19217f61787af78602b23ffed3a4674a2bd11ef",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "version": "0.1.0-alpha.2",
+    "private_dmg_exact_app_hashes": true,
+    "private_dmg_sha256": "bd7bebd4978958c1280b04e834c47214da857beb1653324db7b21522016bc220",
+    "scope": "Private current working app; public alpha.1 is unchanged; later source-only helper/worker changes are excluded"
+  },
+  "bounded_proxy_worker": {
+    "status": "PASS source and owned-process checks",
+    "authorization_process": "Persistent fixed bundled executable worker owns all AuthorizationCopyRights and privileged SCPreferences calls; one retained AuthorizationRef per worker",
+    "transport": "128KiB-bounded framed private stdin/stdout; transaction IDs; no account key or authorization token in arguments/environment",
+    "parent_deadline_seconds": 120,
+    "settings_read_deadline_seconds": 10,
+    "ambiguous_failure": "Worker is terminated/reaped; journal retained, no automatic second authorization; later restore compares current owned keys",
+    "owned_worker_checks": [
+      "persistent two-transaction framing",
+      "pending authorization timeout kills owned child and retains journal",
+      "oversized and partial reply bounds",
+      "malformed reply rejection",
+      "read-only output cap and timeout",
+      "actual packaged early entry exits on EOF before GUI or Keychain"
+    ],
+    "external_review": "Focused source review by independent packet_vpn agent; no blocking finding",
+    "live_user_app_replaced": false,
+    "limitation": "Full worker privileged authorization flow has not been activated on the live host; unprivileged SCPreferences snapshot reads remain in parent and have no observed stall."
+  },
+  "public_candidate": {
+    "version": "0.1.0-alpha.2",
+    "gui_sha256": "c75e5e1776cc1f9029967fe6f96760369fec82fa6e657eae46dff4d9326287da",
+    "universal_signed_daemon_sha256": "45bf7524fc4190ae182302dcd2f262d944051a75ba6cc77ab184bc345b34012e",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "deep_codesign_verification": true,
+    "actual_worker_eof_entry": true,
+    "scope": "Separate release staging with final journal-v3 core and bounded-worker source; current personal runtime app and DMG remain unchanged"
+  }
+}

@@ -6,7 +6,8 @@ import Combine
 public final class AppleVPNController: ObservableObject {
     public static let appGroup = "group.network.meshway"
     public static var sharedContainer: URL? {
-        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup)
+        guard NativeStateKey.hasEntitlement("com.apple.security.application-groups", containing: appGroup) else { return nil }
+        return FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup)
     }
     @Published public private(set) var status: NEVPNStatus = .invalid
     @Published public private(set) var error: String?

@@ -3,7 +3,20 @@ import Security
 
 /// Only Meshway's own single named item is queried. No keychain enumeration.
 public enum NativeStateKey {
-    public static func loadOrCreate() throws -> Data {
+    private static let interactionLock = NSLock()
+    public static func hasEntitlement(_ name: String, containing expected: String) -> Bool {
+        guard let task = SecTaskCreateFromSelf(nil),
+              let values = SecTaskCopyValueForEntitlement(task, name as CFString, nil) as? [String] else { return false }
+        return values.contains(expected)
+    }
+
+    public static func loadOrCreate(allowInteraction: Bool = true) throws -> Data {
+        interactionLock.lock(); defer { interactionLock.unlock() }
+        #if os(macOS)
+        var previousInteraction: DarwinBoolean = true
+        let changedInteraction = !allowInteraction && SecKeychainGetUserInteractionAllowed(&previousInteraction) == errSecSuccess && SecKeychainSetUserInteractionAllowed(false) == errSecSuccess
+        defer { if changedInteraction { _ = SecKeychainSetUserInteractionAllowed(previousInteraction.boolValue) } }
+        #endif
         var query: [CFString: Any] = [
             kSecClass: kSecClassGenericPassword,
             kSecAttrService: "network.meshway.state-vault",
@@ -11,11 +24,13 @@ public enum NativeStateKey {
             kSecAttrSynchronizable: false,
         ]
         if let group = Bundle.main.object(forInfoDictionaryKey: "MeshwayKeychainAccessGroup") as? String,
-           !group.contains("$(") {
+           !group.contains("$("),
+           hasEntitlement("keychain-access-groups", containing: group) {
             query[kSecAttrAccessGroup] = group
             query[kSecUseDataProtectionKeychain] = true
         }
         var lookup = query
+        if !allowInteraction { lookup[kSecUseAuthenticationUI] = kSecUseAuthenticationUIFail }
         lookup[kSecReturnData] = true; lookup[kSecMatchLimit] = kSecMatchLimitOne
         var result: CFTypeRef?
         let found = SecItemCopyMatching(lookup as CFDictionary, &result)
@@ -31,7 +46,12 @@ public enum NativeStateKey {
         query[kSecValueData] = data
         query[kSecAttrAccessible] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         let saved = SecItemAdd(query as CFDictionary, nil)
-        if saved == errSecDuplicateItem { return try loadOrCreate() }
+        if saved == errSecDuplicateItem {
+            var existing: CFTypeRef?
+            let status = SecItemCopyMatching(lookup as CFDictionary, &existing)
+            if status == errSecSuccess, let data = existing as? Data, data.count == 32 { return data }
+            throw ClientError.invalidConfiguration("Meshway’s protected storage key could not be reopened (Keychain status \(status)).")
+        }
         guard saved == errSecSuccess else {
             throw ClientError.invalidConfiguration("Could not protect Meshway's storage key in Keychain (status \(saved)).")
         }
