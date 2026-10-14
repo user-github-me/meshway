@@ -81,7 +81,7 @@ test('public website is responsive, role choices and installation tabs work', as
   await expect(page.getByRole('heading', { name: 'Share internet access deliberately.' })).toBeVisible();
   await page.getByRole('tab', { name: 'npm', exact: true }).click();
   await expect(page.locator('.terminal-card pre')).toContainText('meshway install-core');
-  await expect(page.getByRole('link', { name: 'Android' }).first()).toHaveAttribute('href', /github\.com\/user-github-me\/meshway\/releases\/download\/v0\.1\.0-alpha\.1\/meshway-android-debug\.apk$/);
+  await expect(page.getByRole('link', { name: 'Android' }).first()).toHaveAttribute('href', /github\.com\/user-github-me\/meshway\/releases\/download\/v0\.1\.0-alpha\.2\/meshway-android-debug\.apk$/);
   await page.getByRole('link', { name: 'Get started', exact: true }).click();
   await expect(page.locator('#get-started')).toBeInViewport();
   await page.setViewportSize({ width: 390, height: 844 });
