@@ -35,7 +35,12 @@ try {
     foreach ($shortcut in @('Meshway.lnk','Uninstall Meshway.lnk')) {
         Check (Test-Path -LiteralPath (Join-Path $shortcuts $shortcut)) "Shortcut missing: $shortcut"
         $link=$shell.CreateShortcut((Join-Path $shortcuts $shortcut))
-        Check ($link.TargetPath.StartsWith($install,[StringComparison]::OrdinalIgnoreCase)) 'Shortcut target escaped installed app.'
+        $target=$link.TargetPath
+        $target | Set-Content -LiteralPath (Join-Path $debug ($shortcut+'.target.txt'))
+        $expectedShortcut=if ($shortcut -eq 'Meshway.lnk') { Join-Path $install 'Meshway.exe' } else { Join-Path $install 'unins000.exe' }
+        # Inno uses create-shortcut shell APIs; Windows may normalize a target
+        # into its existing 8.3 path. Compare the file, not a textual prefix.
+        Check ((Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash -eq (Get-FileHash -LiteralPath $expectedShortcut -Algorithm SHA256).Hash) "Shortcut target does not match installed executable: $shortcut"
     }
     Check (@(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -in @('Meshway','meshway-daemon','meshway-vpn-helper') }).Count -eq 0) 'Installer automatically started Meshway networking.'
     Check ((Get-Content -LiteralPath $state -Raw).Trim() -eq $marker) 'Install modified separate private user state.'
