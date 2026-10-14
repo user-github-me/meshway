@@ -50,6 +50,13 @@
     "anonymous_registry_verified": true,
     "index_digest": "sha256:493a63391f1dd3f9ab1f1d8f1b25c1c4f8068c3a24e6259fbccdba675ecbf006"
   },
-  "npm_publication": "pending registry browser authorization/verification",
-  "live_personal_gui_replacement": "pending older app proxy restoration"
+  "npm_publication": "Registry session expired; npm whoami returned401. Alpha2 registry publication pending fresh owner login.",
+  "live_personal_gui_replacement": "pending older app proxy restoration",
+  "public_github_cli_validation": {
+    "signed_metadata_and_cli_tarball_verified": true,
+    "core_download_complete": false,
+    "cache_tamper_check_complete": false,
+    "failure": "Bounded bulk download through existing SOCKS timed out; temporary test packages removed."
+  },
+  "production_baseline_preserved_after_publication": true
 }
