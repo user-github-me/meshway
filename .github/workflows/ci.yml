@@ -102,12 +102,14 @@ jobs:
       - run: ./apps/windows/build.ps1 -Runtime win-x64 -Daemon dist/meshway-windows-amd64.exe -Wintun dist/wintun/amd64/wintun.dll
       - run: ./scripts/validate-windows.ps1 -Daemon dist/Meshway-win-x64/meshway-daemon.exe
       - run: ./scripts/windows-tun-lab.ps1 -Package dist/Meshway-win-x64
+      - run: ./scripts/windows-firewall-lab.ps1 -Package dist/Meshway-win-x64
       - uses: actions/upload-artifact@v4
         with:
           name: windows-runtime-evidence
           path: |
             artifacts/windows-validation.json
             artifacts/windows-wintun-validation.json
+            artifacts/windows-firewall-validation.json
   android:
     runs-on: ubuntu-latest
     steps:

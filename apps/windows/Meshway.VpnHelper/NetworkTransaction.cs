@@ -36,6 +36,13 @@ public sealed class NetworkTransaction : IAsyncDisposable
         finally { File.Delete(scriptPath); File.Delete(inputPath); }
     }
 
+    private static string EmbeddedText(string name)
+    {
+        using var input = typeof(NetworkTransaction).Assembly.GetManifestResourceStream(name) ?? throw new IOException("Missing embedded firewall implementation.");
+        using var reader = new StreamReader(input);
+        return reader.ReadToEnd();
+    }
+
     public async Task Apply(VPNPlan plan)
     {
         if (File.Exists(journal)) await Restore(journal);
@@ -43,7 +50,9 @@ public sealed class NetworkTransaction : IAsyncDisposable
         // operation targets only this random transaction's rules and adapter.
         await File.WriteAllTextAsync(journal, JsonSerializer.Serialize(new { id = ID, interface_name = VPNPlan.InterfaceName, routes = Array.Empty<object>() }));
         applied = true;
-        try { await Run(ApplyScript, new { id = ID, journal, plan.Endpoints, blocked = plan.BlockedCIDRs, adapter = VPNPlan.InterfaceName }); }
+        var firewall = EmbeddedText("Meshway.Firewall.ps1");
+        var source = EmbeddedText("Meshway.FirewallAddressRanges.cs");
+        try { await Run(ApplyScript.Replace("__FIREWALL_HELPERS__", firewall), new { id = ID, journal, plan.Endpoints, blocked = plan.BlockedCIDRs, adapter = VPNPlan.InterfaceName, range_source = source }); }
         catch { await Restore(journal); applied = false; throw; }
     }
 
@@ -63,6 +72,7 @@ public sealed class NetworkTransaction : IAsyncDisposable
 param([string]$InputPath)
 $ErrorActionPreference = 'Stop'
 $p = Get-Content -LiteralPath $InputPath -Raw | ConvertFrom-Json
+__FIREWALL_HELPERS__
 $adapter = Get-NetAdapter -Name $p.adapter -ErrorAction Stop
 $physical = @(Get-NetAdapter | Where-Object { $_.ifIndex -ne $adapter.ifIndex -and $_.Status -eq 'Up' -and $_.ifIndex -ne 1 })
 if ($physical.Count -eq 0) { throw 'No active physical underlay interface. VPN setup stopped.' }
@@ -80,14 +90,8 @@ foreach ($endpoint in $p.Endpoints) {
         New-NetRoute @owned -RouteMetric 1 -PolicyStore ActiveStore | Out-Null
     }
 }
-# Fail closed on every active physical interface before installing defaults.
-# Exact known peer endpoints are excluded from remote block CIDRs.
-foreach ($nic in $physical) {
-    for ($i=0; $i -lt $p.blocked.Count; $i+=100) {
-        $last = [Math]::Min($i+99,$p.blocked.Count-1)
-        New-NetFirewallRule -DisplayName "$($p.id)-$($nic.ifIndex)-$i" -Group $p.id -Direction Outbound -Action Block -InterfaceAlias $nic.Name -RemoteAddress $p.blocked[$i..$last] -Profile Any | Out-Null
-    }
-}
+# Preserve NDP/lease control while blocking TCP, ordinary UDP/DNS and raw IP.
+foreach ($nic in $physical) { Add-MeshwayFirewall -Plan $p -Adapter $nic }
 Set-NetIPInterface -InterfaceIndex $adapter.ifIndex -AddressFamily IPv4 -NlMtuBytes 1280 -InterfaceMetric 1 -Dhcp Disabled
 Set-NetIPInterface -InterfaceIndex $adapter.ifIndex -AddressFamily IPv6 -NlMtuBytes 1280 -InterfaceMetric 1 -Dhcp Disabled
 New-NetIPAddress -InterfaceIndex $adapter.ifIndex -IPAddress '10.77.0.2' -PrefixLength 32 -PolicyStore ActiveStore | Out-Null

@@ -1,0 +1,1 @@
+{"deployment_branch_policy":{"custom_branch_policies":true,"protected_branches":false},"name":"release","protection_rules":[{"prevent_self_review":false,"type":"required_reviewers"},{"prevent_self_review":null,"type":"branch_policy"}]}

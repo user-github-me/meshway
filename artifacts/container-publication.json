@@ -1,9 +1,9 @@
 {
   "image": "ghcr.io/user-github-me/meshway:0.1.0-alpha.1",
-  "checked_at": "2026-10-14T01:35:16.466075+00:00",
+  "checked_at": "2026-10-14T02:03:14.569861+00:00",
   "anonymous": true,
   "status": "PASS",
-  "digest": "sha256:aadef9cb5330ce492f84855ee355912eb6fd625c16b4713a1a0bf6cc710d2328",
+  "digest": "sha256:34e36232baf5f4a0804ba668d206a158005311dd795c88cf0bd7df93df9e5fbc",
   "platforms": [
     "linux/amd64",
     "linux/arm64"
