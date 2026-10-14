@@ -9,8 +9,8 @@ import MeshwayClientCore
 final class AppDelegate: NSObject, NSApplicationDelegate {
     weak var model: AppModel?
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard let model, model.systemProxy.enabled || model.systemProxy.needsRecovery || model.busy else { return .terminateNow }
-        Task { sender.reply(toApplicationShouldTerminate: await model.restoreSystemProxy()) }
+        guard let model, model.systemProxy.enabled || model.systemProxy.needsRecovery || model.activeVPN || model.nativeVPN.state == .recoveryRequired || model.busy else { return .terminateNow }
+        Task { sender.reply(toApplicationShouldTerminate: await model.restoreForQuit()) }
         return .terminateLater
     }
     func applicationWillTerminate(_ notification: Notification) {
@@ -21,7 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 @main
 struct MeshwayEntryPoint {
     @MainActor static func main() {
-        if ProxyWorkerServer.runIfRequested() { return }
+        if ProxyWorkerServer.runIfRequested() || NativeMacVPNController.runResolverIfRequested() { return }
         MeshwayApplication.main()
     }
 }
@@ -77,7 +77,7 @@ final class AppModel: ObservableObject {
         get { connectionMode == .internetVPN }
         set { connectionMode = newValue ? .internetVPN : .socks }
     }
-    var deviceVPNAvailable: Bool { AppleVPNController.sharedContainer != nil }
+    var deviceVPNAvailable: Bool { AppleVPNController.sharedContainer != nil || nativeVPN.available }
     var selectedPeer: String { !requestedPeer.isEmpty ? requestedPeer : status?.upstream_peer.isEmpty == false ? status!.upstream_peer : configuration.upstreamPeer }
     var activeSelection: Bool { status?.upstream_peer.isEmpty == false && !explicitDisconnected }
     var shouldDisconnect: Bool { activeVPN || (systemProxy.enabled && internetVerified) }
@@ -87,17 +87,16 @@ final class AppModel: ObservableObject {
         return selectedPeer.isEmpty ? "Choose a server" : "Your selected server"
     }
     var peerConnected: Bool { status?.upstream_connected == true }
-    var activeVPN: Bool { [.connected, .connecting, .reasserting].contains(vpn.status) }
+    var activeVPN: Bool { [.connected, .connecting, .reasserting].contains(vpn.status) || nativeVPN.active }
 
     func chooseMode(_ mode: ConnectionMode) {
         guard !busy, !activeVPN, mode != .internetVPN || deviceVPNAvailable else { return }
-        if mode == .internetVPN, systemProxy.enabled || systemProxy.needsRecovery { error = "Restore System proxy before switching to Internet VPN."; return }
         connectionMode = mode
         UserDefaults.standard.set(mode.rawValue, forKey: "connectionMode")
     }
 
     func toggleConnection() async {
-        if activeVPN { vpn.disconnect(); return }
+        if activeVPN || nativeVPN.state == .recoveryRequired { await disconnect(); return }
         if systemProxy.enabled && internetVerified { await disconnect(); return }
         if connectionMode == .personalTunnel, !configuration.personalTransportEnabled, !configuration.bootstrapPeers.contains(where: { $0.hasPrefix("/ip4/127.0.0.1/tcp/") }) {
             error = "Configure your personal server’s SSH alias and pinned peer in Settings first."; return
@@ -127,6 +126,7 @@ final class AppModel: ObservableObject {
         if peerConnected && canEnableSystemProxy && !systemProxy.enabled { await setSystemProxy(true) }
     }
     let vpn = AppleVPNController()
+    let nativeVPN = NativeMacVPNController()
     let systemProxy: SystemProxyController
     @Published var showSettings = false
     @Published var showPeerDetails = false
@@ -269,7 +269,7 @@ final class AppModel: ObservableObject {
 
     private func runAccountCommand(_ command: String, file: URL, replaceAccount: Bool = false) async throws {
         try save()
-        guard process == nil, status == nil, ![.connected, .connecting, .reasserting].contains(vpn.status) else { throw ClientError.invalidConfiguration("Stop the daemon before exporting or importing your recovery key.") }
+        guard process == nil, status == nil, !activeVPN, nativeVPN.state != .recoveryRequired else { throw ClientError.invalidConfiguration("Stop the daemon and restore device VPN before exporting or importing your recovery key.") }
         guard FileManager.default.isExecutableFile(atPath: executablePath) else { throw ClientError.invalidConfiguration("Choose the Meshway daemon executable in advanced settings first.") }
         let executable = executablePath
         let config = configURL.path
@@ -408,6 +408,7 @@ final class AppModel: ObservableObject {
                     try? self.logHandle?.close()
                     self.logHandle = nil
                     self.message = "Daemon stopped (exit \(exitCode))."
+                    if self.nativeVPN.state != .disconnected { _ = await self.restoreDeviceVPN() }
                     if self.systemProxy.enabled || self.systemProxy.needsRecovery { _ = await self.restoreSystemProxy() }
                     if exitCode != 0 { self.error = "The peer node stopped unexpectedly. Your previous proxy settings were restored if possible; reconnect to retry." }
                 }
@@ -442,6 +443,7 @@ final class AppModel: ObservableObject {
     func stop() async {
         guard let child = process, !busy else { return }
         internetVerified = false; observedExitIP = nil
+        guard await restoreDeviceVPN() else { return }
         guard await restoreSystemProxy() else { return }
         busy = true
         defer { busy = false }
@@ -522,6 +524,14 @@ final class AppModel: ObservableObject {
         do {
             if deviceVPN {
                 guard deviceVPNAvailable else { throw ClientError.invalidConfiguration("Apple signing is required for Internet VPN. SOCKS and personal tunnels work without device VPN privileges.") }
+                guard await restoreSystemProxy() else { return }
+                if nativeVPN.available {
+                    try await DaemonAPI(configuration:configuration).select(server:server)
+                    try save()
+                    try await nativeVPN.start(configuration:configuration,configURL:configURL,peerID:server.peer_id,peerAddresses:(server.addresses ?? []) + [server.address])
+                    message = "Device VPN capture verified. Internet traffic uses your selected Meshway server."
+                    return
+                }
                 // The foreground core and extension use the same identity store;
                 // release the foreground lock before the provider opens it.
                 guard let child = process else { throw ClientError.invalidConfiguration("Start Meshway from this app before selecting a device VPN server.") }
@@ -549,6 +559,7 @@ final class AppModel: ObservableObject {
 
     func disconnect() async {
         internetVerified = false; observedExitIP = nil
+        guard await restoreDeviceVPN() else { return }
         guard await restoreSystemProxy() else { return }
         if [.connected, .connecting, .reasserting].contains(vpn.status) {
             vpn.disconnect(); message = "Disconnecting device VPN…"; return
@@ -571,6 +582,19 @@ final class AppModel: ObservableObject {
     func restoreSystemProxy() async -> Bool {
         do { try await systemProxy.restoreAsync(); internetVerified = false; observedExitIP = nil; return true }
         catch { self.error = error.localizedDescription; return false }
+    }
+    @discardableResult
+    func restoreDeviceVPN() async -> Bool {
+        if nativeVPN.state != .disconnected {
+            do { try await nativeVPN.stop() }
+            catch { self.error = error.localizedDescription; return false }
+        }
+        if [.connected,.connecting,.reasserting].contains(vpn.status) { vpn.disconnect() }
+        return true
+    }
+    func restoreForQuit() async -> Bool {
+        guard await restoreDeviceVPN() else { return false }
+        return await restoreSystemProxy()
     }
 
     func setSystemProxy(_ enabled: Bool) async {
@@ -751,13 +775,20 @@ struct ContentView: View {
     @ObservedObject var model: AppModel
     @ObservedObject private var vpn: AppleVPNController
     @ObservedObject private var systemProxy: SystemProxyController
+    @ObservedObject private var nativeVPN: NativeMacVPNController
     @State private var page: DashboardPage = .dashboard
-    init(model: AppModel) { self.model = model; vpn = model.vpn; systemProxy = model.systemProxy }
-    private var connected: Bool { model.connectionMode == .internetVPN ? vpn.status == .connected : model.peerConnected && (model.status?.transport?.kind != "ssh" || model.status?.transport?.authenticated == true) && model.systemProxy.enabled && model.internetVerified }
+    init(model: AppModel) { self.model = model; vpn = model.vpn; systemProxy = model.systemProxy; nativeVPN = model.nativeVPN }
+    private var connected: Bool { model.connectionMode == .internetVPN ? vpn.status == .connected || nativeVPN.state == .connected : model.peerConnected && (model.status?.transport?.kind != "ssh" || model.status?.transport?.authenticated == true) && model.systemProxy.enabled && model.internetVerified }
     private var connectionTitle: String {
         if model.busy { return "Working on your connection…" }
         if model.connectionMode == .internetVPN {
             if !model.deviceVPNAvailable { return "Apple signing required" }
+            if nativeVPN.state == .authorizing { return "Waiting for macOS authorization" }
+            if nativeVPN.state == .connecting { return "Configuring device VPN" }
+            if nativeVPN.state == .connected { return "Device VPN capture active" }
+            if nativeVPN.state == .reconnecting { return "VPN capture retained · reconnecting" }
+            if nativeVPN.state == .restoring { return "Restoring your Mac networking" }
+            if nativeVPN.state == .recoveryRequired { return "Device VPN cleanup needs attention" }
             if vpn.status == .reasserting { return "Reconnecting your VPN" }
             if vpn.status == .connected { return "VPN interface active" }
             if vpn.status == .connecting { return "Connecting your VPN" }
@@ -883,6 +914,7 @@ struct ContentView: View {
                         HStack(spacing: 7) { Image(systemName: "info.circle"); Text("Internet VPN (TUN) requires an Apple-signed packet extension. SOCKS and personal tunnels are available now.") }.font(.caption).foregroundStyle(MeshwayTheme.muted)
                     }
                     if let error = vpn.error { notice(error, icon: "exclamationmark.triangle", color: .orange) }
+                    if let error = nativeVPN.error { notice(error, icon:"exclamationmark.triangle",color:.orange) }
                     HStack {
                         Text(model.message).font(.caption).foregroundStyle(MeshwayTheme.muted).fixedSize(horizontal: false, vertical: true)
                         Spacer(minLength: 14)

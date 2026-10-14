@@ -23,6 +23,15 @@ public struct DaemonStatus: Codable, Sendable {
     public let bytes_sent: UInt64
     public let bytes_received: UInt64
     public let transport: TransportStatus?
+    public let vpn: VPNStatus?
+    public struct VPNStatus: Codable, Sendable {
+        public let active: Bool
+        public let peer_id: String?
+        public let capture_ready: Bool?
+        public let capture_device: String?
+        public let capture_instance: String?
+        public let error: String?
+    }
     public struct TransportStatus: Codable, Sendable {
         public let kind: String
         public let configured: Bool

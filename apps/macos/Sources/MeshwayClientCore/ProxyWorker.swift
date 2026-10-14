@@ -36,11 +36,13 @@ final class ProxyWorkerClient: @unchecked Sendable {
 
     /// Bound the fixed read-only networksetup command as well. A stuck settings
     /// read must not prevent the queued journal restoration from returning.
-    static func readCommand(executable: URL, arguments: [String], timeout: TimeInterval = 10) throws -> String {
+    static func readCommand(executable: URL, arguments: [String], timeout: TimeInterval = 10, input: Data? = nil) throws -> String {
         let process = Process(); let pipe = Pipe()
         process.executableURL = executable; process.arguments = arguments
         process.environment = ["PATH":"/usr/bin:/bin:/usr/sbin:/sbin", "LC_ALL":"C"]
-        process.standardInput = FileHandle.nullDevice; process.standardOutput = pipe; process.standardError = pipe
+        let inputPipe = input == nil ? nil : Pipe()
+        if let inputPipe { process.standardInput = inputPipe } else { process.standardInput = FileHandle.nullDevice }
+        process.standardOutput = pipe; process.standardError = pipe
         let owner = ProxyWorkerClient(executable: executable, arguments: arguments, timeout: timeout)
         try process.run(); pipe.fileHandleForWriting.closeFile()
         owner.child = process; owner.output = pipe.fileHandleForReading
@@ -48,6 +50,14 @@ final class ProxyWorkerClient: @unchecked Sendable {
         let fd = pipe.fileHandleForReading.fileDescriptor; let flags = fcntl(fd, F_GETFL)
         guard flags >= 0, fcntl(fd, F_SETFL, flags | O_NONBLOCK) == 0 else { throw owner.failure("Could not configure the owned proxy settings reader.") }
         let deadline = ProcessInfo.processInfo.systemUptime + timeout
+        if let inputPipe, let input {
+            inputPipe.fileHandleForReading.closeFile()
+            owner.input = inputPipe.fileHandleForWriting
+            guard input.count <= maximumFrame else { throw ProxyWorkerFailure(errorDescription:"The owned command input is too large.") }
+            let inputFD = inputPipe.fileHandleForWriting.fileDescriptor; let inputFlags = fcntl(inputFD,F_GETFL)
+            guard inputFlags >= 0, fcntl(inputFD,F_SETFL,inputFlags | O_NONBLOCK) == 0, fcntl(inputFD,F_SETNOSIGPIPE,1) == 0 else { throw owner.failure("Could not configure the owned command input pipe.") }
+            try owner.write(input,to:inputFD,until:deadline);inputPipe.fileHandleForWriting.closeFile();owner.input = nil
+        }
         var result = Data(); var buffer = [UInt8](repeating: 0, count: 4096)
         while true {
             try owner.wait(fd, events: Int16(POLLIN), until: deadline)
