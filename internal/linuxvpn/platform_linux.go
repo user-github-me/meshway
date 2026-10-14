@@ -350,6 +350,9 @@ func Start(o Options) (err error) {
 	if err != nil {
 		return err
 	}
+	if c.PersonalTransport != nil && c.PersonalTransport.Kind == "ssh" {
+		return errors.New("SSH personal transport currently uses SOCKS on Linux; full-device VPN needs validated physical SSH endpoint bypass routing")
+	}
 	for _, tool := range []string{"ip", "nft"} {
 		if _, err = exec.LookPath(tool); err != nil {
 			return fmt.Errorf("install Linux prerequisite %s", tool)

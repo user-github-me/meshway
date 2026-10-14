@@ -36,6 +36,7 @@ type Service struct {
 	host      host.Host
 	mtu       int
 	allowed   map[peer.ID]bool
+	revoked   map[peer.ID]bool
 	authorize func(context.Context, peer.ID) bool
 	mu        sync.Mutex
 	device    io.ReadWriteCloser
@@ -59,7 +60,7 @@ func New(h host.Host, options Options) (*Service, error) {
 		return nil, errors.New("MTU must be between 576 and 9000")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	s := &Service{host: h, mtu: options.MTU, allowed: make(map[peer.ID]bool), authorize: options.Authorize, pending: make(map[network.Stream]struct{}), ctx: ctx, cancel: cancel}
+	s := &Service{host: h, mtu: options.MTU, allowed: make(map[peer.ID]bool), revoked: make(map[peer.ID]bool), authorize: options.Authorize, pending: make(map[network.Stream]struct{}), ctx: ctx, cancel: cancel}
 	for _, id := range options.AllowedPeers {
 		p, err := peer.Decode(id)
 		if err != nil {
@@ -157,7 +158,14 @@ func (s *Service) detach(device io.ReadWriteCloser) {
 }
 
 func (s *Service) accept(stream network.Stream) {
+	s.mu.Lock()
 	approved := s.allowed[stream.Conn().RemotePeer()]
+	denied := s.revoked[stream.Conn().RemotePeer()]
+	s.mu.Unlock()
+	if denied {
+		stream.Reset()
+		return
+	}
 	if s.authorize != nil {
 		ctx, cancel := context.WithTimeout(s.ctx, 5*time.Second)
 		approved = s.authorize(ctx, stream.Conn().RemotePeer())
@@ -192,7 +200,7 @@ func (s *Service) accept(stream network.Stream) {
 func (s *Service) trackHandshake(stream network.Stream) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.closed || s.stream != nil || len(s.pending) > 0 {
+	if s.closed || s.revoked[stream.Conn().RemotePeer()] || s.stream != nil || len(s.pending) > 0 {
 		return false
 	}
 	s.pending[stream] = struct{}{}
@@ -234,7 +242,7 @@ func (s *Service) handshake(stream network.Stream, outbound bool) error {
 func (s *Service) activate(stream network.Stream, device io.ReadWriteCloser) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.closed || s.device != device || s.stream != nil {
+	if s.closed || s.revoked[stream.Conn().RemotePeer()] || s.device != device || s.stream != nil {
 		return errors.New("VPN session unavailable")
 	}
 	s.stream = stream

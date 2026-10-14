@@ -87,8 +87,10 @@ func (n *Node) handleSOCKS(c net.Conn) {
 		socksReply(c, 1)
 		return
 	}
+	_ = c.SetDeadline(time.Now().Add(peerHandshakeTimeout))
 	s, err := n.openTunnel(n.ctx, n.UpstreamPeer(), request{Target: net.JoinHostPort(host, strconv.Itoa(int(p)))})
 	if err != nil {
+		n.recordProxyError(err)
 		socksReply(c, 2)
 		return
 	}

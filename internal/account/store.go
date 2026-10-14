@@ -88,6 +88,8 @@ type Store struct {
 	closed      bool
 	pending     int
 	authPending int
+	authFlights map[peer.ID]*authFlight
+	authCache   map[peer.ID]authProof
 	streams     map[network.Stream]struct{}
 }
 
@@ -212,7 +214,7 @@ func New(dir string, h host.Host, options Options) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Store{onRevoked: options.OnRevoked, storageKey: append([]byte(nil), options.StorageKey...), dir: dir, root: root, host: h, syncEnabled: options.SyncEnabled, streams: make(map[network.Stream]struct{}), data: state{Devices: []Device{}, Events: []Event{}}}
+	s := &Store{onRevoked: options.OnRevoked, storageKey: append([]byte(nil), options.StorageKey...), dir: dir, root: root, host: h, syncEnabled: options.SyncEnabled, streams: make(map[network.Stream]struct{}), authFlights: make(map[peer.ID]*authFlight), authCache: make(map[peer.ID]authProof), data: state{Devices: []Device{}, Events: []Event{}}}
 	path := filepath.Join(dir, "account.json")
 	b, err := statevault.ReadPrivate(path, maxStateSize, s.storageKey)
 	if err == nil {

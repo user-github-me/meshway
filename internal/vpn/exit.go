@@ -43,6 +43,7 @@ type exitService struct {
 	inbound map[peer.ID]*exitSession
 	pending map[network.Stream]struct{}
 	client  *exitClient
+	revoked map[peer.ID]bool
 	wg      sync.WaitGroup
 }
 
@@ -137,7 +138,7 @@ func newExitService(h host.Host, options Options) (*exitService, error) {
 		return nil, errors.New("VPN byte rate cannot be negative")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	e := &exitService{host: h, options: options, ctx: ctx, cancel: cancel, inbound: map[peer.ID]*exitSession{}, pending: map[network.Stream]struct{}{}}
+	e := &exitService{host: h, options: options, ctx: ctx, cancel: cancel, inbound: map[peer.ID]*exitSession{}, pending: map[network.Stream]struct{}{}, revoked: map[peer.ID]bool{}}
 	if options.Exit {
 		h.SetStreamHandler(ExitProtocol, e.accept)
 	}
@@ -186,7 +187,7 @@ func exitHandshake(stream network.Stream, mtu int, outbound bool) error {
 func (e *exitService) accept(stream network.Stream) {
 	p := stream.Conn().RemotePeer()
 	e.mu.Lock()
-	if e.closed || len(e.inbound)+len(e.pending) >= e.options.MaxExitSessions || e.inbound[p] != nil {
+	if e.closed || e.revoked[p] || len(e.inbound)+len(e.pending) >= e.options.MaxExitSessions || e.inbound[p] != nil {
 		e.mu.Unlock()
 		stream.Reset()
 		return
@@ -210,7 +211,7 @@ func (e *exitService) accept(stream network.Stream) {
 	session := &exitSession{stream: stream, cancel: cancel}
 	e.mu.Lock()
 	delete(e.pending, stream)
-	if e.closed || e.inbound[p] != nil {
+	if e.closed || e.revoked[p] || e.inbound[p] != nil {
 		e.mu.Unlock()
 		return
 	}
@@ -287,9 +288,9 @@ func (e *exitService) start(device io.ReadWriteCloser, queue *packetQueue, name,
 		return err
 	}
 	e.mu.Lock()
-	if e.closed {
+	if e.closed || e.revoked[p] {
 		e.mu.Unlock()
-		return errors.New("VPN is closed")
+		return errors.New("VPN is closed or peer revoked")
 	}
 	if e.client != nil {
 		existing := e.client
@@ -320,6 +321,50 @@ func (e *exitService) start(device io.ReadWriteCloser, queue *packetQueue, name,
 	go client.readDevice()
 	go client.reconnect()
 	return nil
+}
+
+// RevokePeer closes pending and established packet sessions and records the
+// denial before resetting streams. A handshake racing with revocation cannot
+// register afterward, and an outbound reconnect cannot bypass the local record.
+func (s *Service) RevokePeer(id string) {
+	p, err := peer.Decode(id)
+	if err != nil {
+		return
+	}
+	s.exit.mu.Lock()
+	s.exit.revoked[p] = true
+	for stream := range s.exit.pending {
+		if stream.Conn().RemotePeer() == p {
+			stream.Reset()
+		}
+	}
+	if session := s.exit.inbound[p]; session != nil {
+		session.cancel()
+		session.stream.Reset()
+	}
+	client := s.exit.client
+	if client != nil && client.peer == p {
+		s.exit.client = nil
+	} else {
+		client = nil
+	}
+	s.exit.mu.Unlock()
+	if client != nil {
+		client.close()
+	}
+	s.mu.Lock()
+	s.revoked[p] = true
+	delete(s.allowed, p)
+	for stream := range s.pending {
+		if stream.Conn().RemotePeer() == p {
+			stream.Reset()
+		}
+	}
+	if s.stream != nil && s.stream.Conn().RemotePeer() == p {
+		s.stream.Reset()
+		s.stream = nil
+	}
+	s.mu.Unlock()
 }
 func (c *exitClient) connect() error {
 	c.mu.Lock()
@@ -481,6 +526,12 @@ func (s *Service) StartPacketVPN(peerID string) error {
 	return err
 }
 func (s *Service) ReadPacket() ([]byte, error) {
+	return s.ReadPacketContext(context.Background())
+}
+
+// ReadPacketContext lets a local packet helper cancel a bounded poll without
+// leaving a goroutine holding the next packet in the queue.
+func (s *Service) ReadPacketContext(ctx context.Context) ([]byte, error) {
 	s.exit.mu.Lock()
 	c := s.exit.client
 	s.exit.mu.Unlock()
@@ -488,6 +539,8 @@ func (s *Service) ReadPacket() ([]byte, error) {
 		return nil, errors.New("packet VPN is not started")
 	}
 	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	case <-c.queue.done:
 		return nil, io.EOF
 	case r := <-c.queue.output:

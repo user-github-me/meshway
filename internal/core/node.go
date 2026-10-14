@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -17,16 +18,18 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/p2p/net/swarm"
 	"github.com/libp2p/go-libp2p/p2p/protocol/circuitv2/relay"
 	"github.com/user-github-me/meshway/internal/account"
 	"github.com/user-github-me/meshway/internal/config"
 	"github.com/user-github-me/meshway/internal/discovery"
 	"github.com/user-github-me/meshway/internal/state"
+	"github.com/user-github-me/meshway/internal/transportssh"
 	"github.com/user-github-me/meshway/internal/vpn"
 	"golang.org/x/time/rate"
 )
 
-const Version = "0.1.0-alpha.1"
+const Version = "0.1.0-alpha.2"
 
 type Node struct {
 	preferencesMu    sync.Mutex
@@ -43,6 +46,8 @@ type Node struct {
 	server           *http.Server
 	relay            *relay.Relay
 	vpn              *vpn.Service
+	vpnMu            sync.RWMutex
+	vpnOwner         string
 	Account          *account.Store
 	stateLock        *state.Lock
 	Discovery        *discovery.Service
@@ -51,12 +56,15 @@ type Node struct {
 	done             chan struct{}
 	bytesSent        atomic.Uint64
 	bytesReceived    atomic.Uint64
+	proxyFailures    atomic.Uint64
+	proxyLastError   string
 	sessions         chan struct{}
 	socksAddress     string
 	apiAddress       string
 	upstreamPeer     string
 	outbound         map[network.Stream]struct{}
 	tunnelGeneration uint64
+	personalSSH      *transportssh.Manager
 }
 
 type PeerInfo struct {
@@ -67,20 +75,34 @@ type Roles struct {
 	Relay bool `json:"relay"`
 	Exit  bool `json:"exit"`
 }
+type ForwardSummary struct {
+	Name    string `json:"name"`
+	Listen  string `json:"listen"`
+	Service string `json:"service,omitempty"`
+}
+type ConfigurationSummary struct {
+	SOCKSEnabled   bool             `json:"socks_enabled"`
+	Forwards       []ForwardSummary `json:"forwards"`
+	PersonalServer bool             `json:"personal_server"`
+}
 type Status struct {
-	Version           string     `json:"version"`
-	PeerID            string     `json:"peer_id"`
-	Addresses         []string   `json:"addresses"`
-	Peers             []PeerInfo `json:"peers"`
-	Roles             Roles      `json:"roles"`
-	SOCKSListen       string     `json:"socks_listen"`
-	APIListen         string     `json:"api_listen"`
-	UpstreamPeer      string     `json:"upstream_peer"`
-	UpstreamConnected bool       `json:"upstream_connected"`
-	StartedAt         time.Time  `json:"started_at"`
-	BytesSent         uint64     `json:"bytes_sent"`
-	BytesReceived     uint64     `json:"bytes_received"`
-	VPN               any        `json:"vpn,omitempty"`
+	Version           string               `json:"version"`
+	PeerID            string               `json:"peer_id"`
+	Addresses         []string             `json:"addresses"`
+	Peers             []PeerInfo           `json:"peers"`
+	Roles             Roles                `json:"roles"`
+	SOCKSListen       string               `json:"socks_listen"`
+	APIListen         string               `json:"api_listen"`
+	UpstreamPeer      string               `json:"upstream_peer"`
+	UpstreamConnected bool                 `json:"upstream_connected"`
+	StartedAt         time.Time            `json:"started_at"`
+	BytesSent         uint64               `json:"bytes_sent"`
+	BytesReceived     uint64               `json:"bytes_received"`
+	ProxyFailures     uint64               `json:"proxy_failures"`
+	ProxyLastError    string               `json:"proxy_last_error,omitempty"`
+	VPN               any                  `json:"vpn,omitempty"`
+	Configuration     ConfigurationSummary `json:"configuration_summary"`
+	Transport         transportssh.Status  `json:"transport"`
 }
 
 func Start(parent context.Context, c config.Config) (*Node, error) {
@@ -114,6 +136,26 @@ func Start(parent context.Context, c config.Config) (*Node, error) {
 	if c.UpstreamPeer == "" {
 		c.UpstreamPeer = saved.Selected
 	}
+	var managedSSH *transportssh.Manager
+	if p := c.PersonalTransport; p != nil {
+		c.UpstreamPeer = p.PeerID
+		o := transportssh.Options{Alias: p.SSHAlias, LocalPort: p.LocalPort, RemotePort: p.RemotePort, PeerID: p.PeerID}
+		managedSSH, err = transportssh.New(o)
+		if err != nil {
+			lock.Close()
+			return nil, err
+		}
+		// Managed personal transport reaches this peer only through the explicit
+		// loopback forward; previously saved public invitations cannot replace it.
+		filtered := []string{}
+		for _, address := range c.BootstrapPeers {
+			info, parseErr := peer.AddrInfoFromString(address)
+			if parseErr == nil && info.ID.String() != p.PeerID {
+				filtered = append(filtered, address)
+			}
+		}
+		c.BootstrapPeers = append(filtered, transportssh.Invitation(o))
+	}
 	opts := []libp2p.Option{libp2p.Identity(key), libp2p.ListenAddrStrings(c.ListenAddresses...), libp2p.EnableRelay(), libp2p.EnableHolePunching(), libp2p.NATPortMap()}
 	// Relay reservations are requested only from configured bootstrap peers.
 	var bootstrap []peer.AddrInfo
@@ -139,6 +181,7 @@ func Start(parent context.Context, c config.Config) (*Node, error) {
 		maxSessions = c.Limits.MaxSessions
 	}
 	n := &Node{bandwidthLimits: make(map[peer.ID]*rate.Limiter), Config: c, Host: h, ctx: ctx, cancel: cancel, started: time.Now().UTC(), connections: make(map[net.Conn]struct{}), done: make(chan struct{}), sessions: make(chan struct{}, maxSessions), stateLock: lock, upstreamPeer: c.UpstreamPeer, outbound: map[network.Stream]struct{}{}}
+	n.personalSSH = managedSSH
 	startupReady := make(chan struct{})
 	defer close(startupReady)
 	n.Account, err = account.New(c.StateDir, h, account.Options{SyncEnabled: c.AccountSync, Label: c.DeviceLabel, StorageKey: c.StorageKey, OnRevoked: func(id string) {
@@ -151,6 +194,9 @@ func Start(parent context.Context, c config.Config) (*Node, error) {
 			return
 		}
 		if p, err := peer.Decode(id); err == nil {
+			if n.vpn != nil {
+				n.vpn.RevokePeer(id)
+			}
 			_ = h.Network().ClosePeer(p)
 		}
 	}})
@@ -165,6 +211,29 @@ func Start(parent context.Context, c config.Config) (*Node, error) {
 	}
 	for _, p := range bootstrap {
 		n.Discovery.TrustPeer(p.ID)
+	}
+	if managedSSH != nil {
+		p, _ := peer.AddrInfoFromString(transportssh.Invitation(transportssh.Options{LocalPort: c.PersonalTransport.LocalPort, PeerID: c.PersonalTransport.PeerID}))
+		managedSSH.SetReadyCheck(func() bool { return n.sshPeerConnected(p.ID) })
+		if err = managedSSH.Start(ctx, func(authCtx context.Context, _ string) error {
+			n.clearDialBackoff(p.ID)
+			if err := h.Connect(authCtx, *p); err != nil {
+				return err
+			}
+			for _, conn := range h.Network().ConnsToPeer(p.ID) {
+				if !conn.IsClosed() && conn.RemoteMultiaddr().String() == p.Addrs[0].String() {
+					server, err := n.Discovery.Server(authCtx, p.ID)
+					if err != nil || !server.Personal || !server.CanConnect {
+						return errors.New("personal server same-account approval is unavailable")
+					}
+					return nil
+				}
+			}
+			return errors.New("pinned peer is not connected through the owned SSH forward")
+		}); err != nil {
+			n.Stop()
+			return nil, err
+		}
 	}
 	if c.Relay {
 		n.relay, err = relay.New(h, relay.WithResources(relay.Resources{MaxReservations: 128, MaxCircuits: 16, BufferSize: 2048, ReservationTTL: time.Hour, MaxReservationsPerPeer: 1, MaxReservationsPerIP: 8, MaxReservationsPerASN: 32, Limit: &relay.RelayLimit{Duration: 2 * time.Minute, Data: 64 << 20}}))
@@ -292,6 +361,19 @@ func (n *Node) peerConnected(id peer.ID) bool {
 	return false
 }
 
+func (n *Node) sshPeerConnected(id peer.ID) bool {
+	if n.Config.PersonalTransport == nil {
+		return false
+	}
+	address := fmt.Sprintf("/ip4/127.0.0.1/tcp/%d", n.Config.PersonalTransport.LocalPort)
+	for _, conn := range n.Host.Network().ConnsToPeer(id) {
+		if !conn.IsClosed() && conn.RemoteMultiaddr().String() == address {
+			return true
+		}
+	}
+	return false
+}
+
 func (n *Node) listen(addr string) (net.Listener, error) {
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -334,6 +416,9 @@ func (n *Node) accept(l net.Listener, handler func(net.Conn)) {
 func (n *Node) Stop() error {
 	n.stopOnce.Do(func() {
 		n.cancel()
+		if n.personalSSH != nil {
+			_ = n.personalSSH.Stop()
+		}
 		if n.Account != nil {
 			_ = n.Account.Record("daemon_stopped", "")
 			_ = n.Account.Close()
@@ -380,6 +465,7 @@ func (n *Node) Connect(ctx context.Context, address string) (PeerInfo, error) {
 	if err != nil {
 		return PeerInfo{}, err
 	}
+	n.clearDialBackoff(p.ID)
 	if err = n.Host.Connect(ctx, *p); err != nil {
 		return PeerInfo{}, err
 	}
@@ -416,16 +502,35 @@ func (n *Node) Status() Status {
 	if id, err := peer.Decode(upstream); err == nil {
 		connected = n.peerConnected(id)
 	}
-	return Status{Version: Version, PeerID: n.Host.ID().String(), Addresses: addresses, Peers: peers, Roles: Roles{Relay: n.Config.Relay, Exit: n.Config.Exit}, SOCKSListen: n.socksAddress, APIListen: n.apiAddress, UpstreamPeer: upstream, UpstreamConnected: connected, StartedAt: n.started, BytesSent: n.bytesSent.Load(), BytesReceived: n.bytesReceived.Load(), VPN: n.VPNStatus()}
+	forwards := []ForwardSummary{}
+	for _, f := range n.Config.Forwards {
+		forwards = append(forwards, ForwardSummary{Name: f.Name, Listen: f.Listen, Service: f.Service})
+	}
+	transport := transportssh.Status{Kind: "direct", Ready: connected, Authenticated: connected}
+	if n.personalSSH != nil {
+		transport = n.personalSSH.Status()
+		pinned, err := peer.Decode(transport.PeerID)
+		pinnedConnected := err == nil && n.sshPeerConnected(pinned)
+		transport.Authenticated = transport.Authenticated && pinnedConnected
+		transport.Ready = transport.Ready && pinnedConnected
+	}
+	return Status{Version: Version, PeerID: n.Host.ID().String(), Addresses: addresses, Peers: peers, Roles: Roles{Relay: n.Config.Relay, Exit: n.Config.Exit}, SOCKSListen: n.socksAddress, APIListen: n.apiAddress, UpstreamPeer: upstream, UpstreamConnected: connected, StartedAt: n.started, BytesSent: n.bytesSent.Load(), BytesReceived: n.bytesReceived.Load(), ProxyFailures: n.proxyFailures.Load(), ProxyLastError: n.proxyError(), VPN: n.VPNStatus(), Transport: transport, Configuration: ConfigurationSummary{SOCKSEnabled: n.socksAddress != "", Forwards: forwards, PersonalServer: n.Config.PersonalServer}}
 }
 
 func (n *Node) UpstreamPeer() string { n.mu.Lock(); defer n.mu.Unlock(); return n.upstreamPeer }
+
+func (n *Node) clearDialBackoff(id peer.ID) {
+	if network, ok := n.Host.Network().(*swarm.Swarm); ok {
+		network.Backoff().Clear(id)
+	}
+}
 
 func (n *Node) SelectPeer(ctx context.Context, peerID, address string) error {
 	p, err := peer.Decode(peerID)
 	if err != nil {
 		return err
 	}
+	n.clearDialBackoff(p)
 	if address != "" {
 		if err = discovery.ValidateAddress(address, p); err != nil {
 			return err
@@ -513,7 +618,7 @@ func (n *Node) handleTunnel(s network.Stream) {
 	}
 	defer func() { <-n.sessions }()
 	defer s.Close()
-	_ = s.SetDeadline(time.Now().Add(handshakeTimeout))
+	_ = s.SetDeadline(time.Now().Add(peerHandshakeTimeout))
 	if !n.authorized(n.ctx, s.Conn().RemotePeer()) {
 		_ = writeFrame(s, response{Error: "peer is not allowed"})
 		return
@@ -572,21 +677,24 @@ func (n *Node) openTunnel(ctx context.Context, peerID string, req request) (netw
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithTimeout(ctx, handshakeTimeout)
+	ctx, cancel := context.WithTimeout(ctx, peerHandshakeTimeout)
 	defer cancel()
 	s, err := n.Host.NewStream(network.WithAllowLimitedConn(ctx, "configured tunnel peer"), p, TunnelProtocol)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("open encrypted gateway stream: %w", err)
 	}
-	_ = s.SetDeadline(time.Now().Add(handshakeTimeout))
+	deadline, _ := ctx.Deadline()
+	_ = s.SetDeadline(deadline)
+	stopCancel := context.AfterFunc(ctx, func() { _ = s.Reset() })
+	defer stopCancel()
 	if err = writeFrame(s, req); err != nil {
 		_ = s.Reset()
-		return nil, err
+		return nil, fmt.Errorf("send gateway request: %w", err)
 	}
 	var resp response
 	if err = readFrame(s, &resp); err != nil {
 		_ = s.Reset()
-		return nil, err
+		return nil, fmt.Errorf("read gateway response: %w", err)
 	}
 	if !resp.OK {
 		_ = s.Close()
@@ -633,4 +741,38 @@ func (n *Node) bridge(c net.Conn, s network.Stream) {
 	}
 	_ = s.CloseRead()
 	<-done
+}
+
+// proxyError reports a bounded local connection diagnostic without request bodies
+// or account credentials. It lets native clients explain a failed SOCKS request.
+func (n *Node) proxyError() string {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return n.proxyLastError
+}
+func (n *Node) recordProxyError(err error) {
+	if err == nil {
+		return
+	}
+	value := "Could not open the encrypted proxy stream."
+	switch {
+	case strings.Contains(err.Error(), "private or reserved destination"):
+		value = "The server refused a private or reserved destination."
+	case strings.Contains(err.Error(), "peer is not allowed"):
+		value = "This device is not approved by the exit server."
+	case strings.Contains(err.Error(), "no upstream peer"):
+		value = "Choose an exit server before using the proxy."
+	case strings.Contains(err.Error(), "internet exit is disabled"):
+		value = "Internet forwarding is disabled on the selected server."
+	case errors.Is(err, context.DeadlineExceeded):
+		value = "The exit connection timed out."
+	case strings.Contains(err.Error(), "deadline") && strings.Contains(err.Error(), "send gateway request"):
+		value = "The encrypted connection timed out while sending the request."
+	case strings.Contains(err.Error(), "deadline") && strings.Contains(err.Error(), "read gateway response"):
+		value = "The exit server did not answer the connection request in time."
+	}
+	n.mu.Lock()
+	n.proxyLastError = value
+	n.mu.Unlock()
+	n.proxyFailures.Add(1)
 }

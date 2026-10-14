@@ -18,6 +18,11 @@ import (
 const TunnelProtocol = "/meshway/tcp/1.0.0"
 const maxHeader = 4096
 const handshakeTimeout = 10 * time.Second
+
+// A peer handshake includes encrypted transport setup, account authorization,
+// exit-side DNS and a target connection. Those independently bounded operations
+// must fit inside the total budget rather than sharing the target's ten seconds.
+const peerHandshakeTimeout = 30 * time.Second
 const idleTimeout = 2 * time.Minute
 
 type request struct {
@@ -112,7 +117,11 @@ func dialTarget(ctx context.Context, target string, allowPrivate bool) (net.Conn
 		}
 	}
 	d := net.Dialer{Timeout: handshakeTimeout}
-	return dialAddresses(ctx, addresses, port, d.DialContext)
+	c, err := dialAddresses(ctx, addresses, port, d.DialContext)
+	if err != nil {
+		return nil, fmt.Errorf("connect target: %w", err)
+	}
+	return c, nil
 }
 
 // Race only the previously validated literal IPs. Staggering the other family

@@ -17,6 +17,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/user-github-me/meshway/internal/state"
+	"github.com/user-github-me/meshway/internal/transportssh"
 )
 
 type Forward struct {
@@ -48,31 +49,40 @@ type Limits struct {
 	MaxFlowsPerVPN int `json:"max_flows_per_vpn,omitempty"`
 }
 
+type PersonalTransport struct {
+	Kind       string `json:"kind"`
+	SSHAlias   string `json:"ssh_alias"`
+	LocalPort  int    `json:"local_port"`
+	RemotePort int    `json:"remote_port"`
+	PeerID     string `json:"peer_id"`
+}
+
 type Config struct {
-	AutoDiscovery       bool      `json:"auto_discovery"`
-	Limits              *Limits   `json:"limits,omitempty"`
-	StorageKey          []byte    `json:"-"`
-	StateDir            string    `json:"state_dir"`
-	ListenAddresses     []string  `json:"listen_addresses"`
-	BootstrapPeers      []string  `json:"bootstrap_peers"`
-	UpstreamPeer        string    `json:"upstream_peer"`
-	SOCKSListen         string    `json:"socks_listen"`
-	APIListen           string    `json:"api_listen"`
-	APIToken            string    `json:"api_token"`
-	AllowedOrigins      []string  `json:"allowed_origins"`
-	Relay               bool      `json:"relay"`
-	Exit                bool      `json:"exit"`
-	AllowPrivateTargets bool      `json:"allow_private_targets"`
-	AllowedPeers        []string  `json:"allowed_peers"`
-	Forwards            []Forward `json:"forwards"`
-	Services            []Service `json:"services"`
-	VPN                 *VPN      `json:"vpn,omitempty"`
-	AccountSync         bool      `json:"account_sync"`
-	DeviceLabel         string    `json:"device_label,omitempty"`
-	Advertise           bool      `json:"advertise"`
-	ServerLabel         string    `json:"server_label,omitempty"`
-	ServerCountry       string    `json:"server_country,omitempty"`
-	PersonalServer      bool      `json:"personal_server"`
+	AutoDiscovery       bool               `json:"auto_discovery"`
+	Limits              *Limits            `json:"limits,omitempty"`
+	StorageKey          []byte             `json:"-"`
+	StateDir            string             `json:"state_dir"`
+	ListenAddresses     []string           `json:"listen_addresses"`
+	BootstrapPeers      []string           `json:"bootstrap_peers"`
+	UpstreamPeer        string             `json:"upstream_peer"`
+	SOCKSListen         string             `json:"socks_listen"`
+	APIListen           string             `json:"api_listen"`
+	APIToken            string             `json:"api_token"`
+	AllowedOrigins      []string           `json:"allowed_origins"`
+	Relay               bool               `json:"relay"`
+	Exit                bool               `json:"exit"`
+	AllowPrivateTargets bool               `json:"allow_private_targets"`
+	AllowedPeers        []string           `json:"allowed_peers"`
+	Forwards            []Forward          `json:"forwards"`
+	Services            []Service          `json:"services"`
+	VPN                 *VPN               `json:"vpn,omitempty"`
+	AccountSync         bool               `json:"account_sync"`
+	DeviceLabel         string             `json:"device_label,omitempty"`
+	Advertise           bool               `json:"advertise"`
+	ServerLabel         string             `json:"server_label,omitempty"`
+	ServerCountry       string             `json:"server_country,omitempty"`
+	PersonalServer      bool               `json:"personal_server"`
+	PersonalTransport   *PersonalTransport `json:"personal_transport,omitempty"`
 }
 
 func Default(stateDir string) (Config, error) {
@@ -159,6 +169,23 @@ func LoopbackAddress(addr string) error {
 }
 
 func (c Config) Validate() error {
+	if p := c.PersonalTransport; p != nil {
+		if p.Kind != "ssh" {
+			return errors.New("personal_transport.kind must be ssh")
+		}
+		if err := transportssh.Validate(transportssh.Options{Alias: p.SSHAlias, LocalPort: p.LocalPort, RemotePort: p.RemotePort, PeerID: p.PeerID}); err != nil {
+			return err
+		}
+		if _, err := peer.Decode(p.PeerID); err != nil {
+			return errors.New("personal_transport.peer_id must pin a valid Meshway peer")
+		}
+		if c.UpstreamPeer != "" && c.UpstreamPeer != p.PeerID {
+			return errors.New("personal transport peer must match upstream_peer")
+		}
+		if c.PersonalServer || c.Exit || c.Relay {
+			return errors.New("managed personal transport requires a client configuration")
+		}
+	}
 	if c.Limits != nil {
 		if c.Limits.MaxSessions < 0 || c.Limits.MaxSessions > 1024 || c.Limits.BytesPerSecond < 0 || c.Limits.BytesPerSecond > 1<<30 || c.Limits.MaxVPNSessions < 0 || c.Limits.MaxVPNSessions > 128 || c.Limits.MaxFlowsPerVPN < 0 || c.Limits.MaxFlowsPerVPN > 1024 {
 			return errors.New("limits exceed permitted session, flow, or bandwidth bounds")

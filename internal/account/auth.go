@@ -13,6 +13,41 @@ import (
 
 const AuthProtocol protocol.ID = "/meshway/account-auth/1.0.0"
 
+type authFlight struct {
+	done chan struct{}
+	err  error
+}
+type authProof struct {
+	connectionID string
+	expires      time.Time
+}
+
+func (s *Store) cachedAuthLocked(id peer.ID) bool {
+	proof, ok := s.authCache[id]
+	if !ok || time.Now().After(proof.expires) {
+		delete(s.authCache, id)
+		return false
+	}
+	validDevice := false
+	for _, d := range s.data.Devices {
+		if d.PeerID == id.String() {
+			validDevice = !d.Revoked
+			break
+		}
+	}
+	if !validDevice {
+		delete(s.authCache, id)
+		return false
+	}
+	for _, conn := range s.host.Network().ConnsToPeer(id) {
+		if !conn.IsClosed() && conn.ID() == proof.connectionID {
+			return true
+		}
+	}
+	delete(s.authCache, id)
+	return false
+}
+
 func (s *Store) beginAuth() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -97,23 +132,95 @@ func (s *Store) rememberDevice(c Certificate) error {
 
 // AuthorizePeer proves account membership using a root-signed device certificate
 // bound to the peer's encrypted transport identity, without enabling history sync.
+// Concurrent requests share one exchange. A successful proof is reused for at
+// most 30 seconds on that same live encrypted connection; revocations are checked
+// on every call and disconnected/replaced connections require a new exchange.
 func (s *Store) AuthorizePeer(ctx context.Context, id peer.ID) error {
 	if id == s.host.ID() {
 		return errors.New("cannot authorize self as remote")
 	}
-	if !s.beginAuth() {
-		return errors.New("account authentication busy or closed")
+	if err := ctx.Err(); err != nil {
+		return err
 	}
-	defer s.endAuth()
+	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		return errors.New("account is closed")
+	}
+	for _, d := range s.data.Devices {
+		if d.PeerID == id.String() && d.Revoked {
+			s.mu.Unlock()
+			return errors.New("device is revoked")
+		}
+	}
+	if s.cachedAuthLocked(id) {
+		s.mu.Unlock()
+		return nil
+	}
+	flight := s.authFlights[id]
+	if flight == nil {
+		if s.authPending >= 8 {
+			s.mu.Unlock()
+			return errors.New("account authentication busy or closed")
+		}
+		flight = &authFlight{done: make(chan struct{})}
+		s.authFlights[id] = flight
+		s.authPending++
+		go func() {
+			connectionID, err := s.authorizeExchange(context.Background(), id)
+			s.mu.Lock()
+			if err == nil {
+				if s.closed {
+					err = errors.New("account is closed")
+				} else {
+					for _, d := range s.data.Devices {
+						if d.PeerID == id.String() && d.Revoked {
+							err = errors.New("device is revoked")
+							break
+						}
+					}
+				}
+			}
+			if err == nil {
+				s.authCache[id] = authProof{connectionID: connectionID, expires: time.Now().Add(30 * time.Second)}
+			}
+			flight.err = err
+			delete(s.authFlights, id)
+			s.authPending--
+			close(flight.done)
+			s.mu.Unlock()
+		}()
+	}
+	s.mu.Unlock()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-flight.done:
+		if flight.err != nil {
+			return flight.err
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if s.closed {
+			return errors.New("account is closed")
+		}
+		if !s.cachedAuthLocked(id) {
+			return errors.New("account proof expired or peer disconnected")
+		}
+		return nil
+	}
+}
+
+func (s *Store) authorizeExchange(ctx context.Context, id peer.ID) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	stream, err := s.host.NewStream(network.WithAllowLimitedConn(ctx, "personal server authentication"), id, AuthProtocol)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if !s.trackStream(stream) {
 		stream.Reset()
-		return errors.New("account is closed")
+		return "", errors.New("account is closed")
 	}
 	defer s.untrackStream(stream)
 	defer stream.Close()
@@ -123,13 +230,13 @@ func (s *Store) AuthorizePeer(ctx context.Context, id peer.ID) error {
 	c, err := s.exchangeAuthCertificate(stream, true)
 	if err != nil {
 		stream.Reset()
-		return err
+		return "", err
 	}
 	if err = s.rememberDevice(c); err != nil {
-		return err
+		return "", err
 	}
 	// Best-effort versioned exchange preserves compatibility with older peers.
 	// Offline devices receive signed revocations on their next authenticated link.
 	go func() { _ = s.ExchangeRevocations(context.Background(), id) }()
-	return nil
+	return stream.Conn().ID(), nil
 }

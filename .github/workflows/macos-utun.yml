@@ -1,0 +1,60 @@
+name: Disposable macOS utun runtime
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Exact source commit to build
+        required: true
+        type: string
+      exit_ip:
+        description: Explicit temporary public Meshway exit IPv4
+        required: true
+        type: string
+      exit_peer:
+        description: Pinned temporary exit peer ID
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  macos-utun:
+    runs-on: macos-14
+    timeout-minutes: 25
+    env:
+      MESHWAY_DISPOSABLE_MACOS_VM: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.2'
+      - name: Build and publish only the temporary client public peer ID
+        run: |
+          mkdir -p .tools/macos-utun-lab
+          go build -buildvcs=false -trimpath -ldflags='-s -w' -o .tools/macos-utun-lab/meshway ./cmd/meshway
+          python3 scripts/macos-utun-lab.py --prepare
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-utun-client-peer
+          path: .tools/macos-utun-lab/client-peer.json
+          include-hidden-files: true
+          if-no-files-found: error
+      - name: Actual kernel capture, DNS, TCP/TLS and owned cleanup
+        env:
+          EXIT_IP: ${{ inputs.exit_ip }}
+          EXIT_PEER: ${{ inputs.exit_peer }}
+        run: python3 scripts/macos-utun-lab.py --exit-ip "$EXIT_IP" --exit-peer "$EXIT_PEER"
+      - name: Final scoped cleanup
+        if: always()
+        run: |
+          if [ -x .tools/macos-utun-lab/meshway ]; then
+            sudo -n .tools/macos-utun-lab/meshway vpn stop --config "$PWD/.tools/macos-utun-lab/config.json" || true
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: macos-utun-runtime-proof
+          path: .tools/macos-utun-lab/result.json
+          include-hidden-files: true
+          if-no-files-found: warn
