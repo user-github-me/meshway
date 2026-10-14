@@ -190,6 +190,7 @@ final class SystemProxyTests: XCTestCase {
         withExtendedLifetime(first) { }
     }
 
+    @MainActor
     private func appliedJournal(_ dir: URL, fake: FakeProxy) throws {
         fake.keys = ["Wi-Fi": .init(host: nil, port: nil, enabled: nil, httpEnabled: 1), "Ethernet": .init(host: "old.example", port: 1088, enabled: 1)]
         var first: SystemProxyController? = SystemProxyController(directory: dir, runner: fake.run, snapshotter: { fake.keys![$0]! }, effectiveChecker: { _, _ in true })
@@ -197,6 +198,7 @@ final class SystemProxyTests: XCTestCase {
         first = nil
     }
 
+    @MainActor
     func testResumeOwnAppliedJournalOnlyReadsAndRetainsRecoveryFile() async throws {
         let dir = try directory(); defer { try? FileManager.default.removeItem(at: dir) }
         let fake = FakeProxy(); try appliedJournal(dir, fake: fake)
@@ -209,6 +211,7 @@ final class SystemProxyTests: XCTestCase {
         let stillApplied = await resumed.verifyStillAppliedAsync(); XCTAssertTrue(stillApplied)
     }
 
+    @MainActor
     func testResumeRejectsForeignEndpointWithoutWrites() async throws {
         for endpoint in [("127.0.0.1", 1081), ("::1", 1080), ("203.0.113.1", 1080)] {
             let dir = try directory(); defer { try? FileManager.default.removeItem(at: dir) }
@@ -220,6 +223,7 @@ final class SystemProxyTests: XCTestCase {
         }
     }
 
+    @MainActor
     func testResumeRejectsExternalServiceChangesWithoutWrites() async throws {
         for field in ["socks", "http", "disabled", "missing"] {
             let dir = try directory(); defer { try? FileManager.default.removeItem(at: dir) }
@@ -236,6 +240,7 @@ final class SystemProxyTests: XCTestCase {
         }
     }
 
+    @MainActor
     func testResumeRejectsEffectiveProxyDriftAndInterruptedRestore() async throws {
         for interrupted in [false, true] {
             let dir = try directory(); defer { try? FileManager.default.removeItem(at: dir) }
@@ -255,6 +260,7 @@ final class SystemProxyTests: XCTestCase {
         }
     }
 
+    @MainActor
     func testSecondAppCannotResumeOrRestoreJournalWithoutLock() async throws {
         let dir = try directory(); defer { try? FileManager.default.removeItem(at: dir) }
         let fake = FakeProxy(); try appliedJournal(dir, fake: fake)
