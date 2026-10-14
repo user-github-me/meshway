@@ -37,6 +37,9 @@ function startDaemon(path: string): Promise<{ process: ChildProcess; status: { p
 }
 
 test.beforeAll(async () => {
+  // A cold Go module download/build is preparation; keep each browser action
+  // at its normal deadline while bounding this setup independently.
+  test.setTimeout(240_000);
   mkdirSync(screenshots, { recursive: true });
   execFileSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'build', '--workspace', '@meshway/extension'], { cwd: repository, stdio: 'pipe', timeout: 60_000 });
   work = mkdtempSync(resolve(tmpdir(), 'meshway-web-'));
