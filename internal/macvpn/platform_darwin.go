@@ -520,15 +520,39 @@ func (e systemExecutor) inspect(ctx context.Context, s step) (bool, error) {
 		if len(args) < 7 || args[0] != "-n" || args[1] != "add" || (args[2] != "-inet" && args[2] != "-inet6") || (args[3] != "-host" && args[3] != "-net") {
 			return false, errors.New("invalid journal route")
 		}
-		// Closing the original utun descriptor destroys its interface and
-		// interface-bound routes. A subsequently reused name belongs to a
-		// different process; no route probe or deletion may claim it.
-		if iface := argument(args, "-interface"); validDevice(iface) && e.liveDevice != iface {
-			return false, nil
-		}
 		marker, err := strconv.ParseUint(argument(args, "-hopcount"), 10, 32)
 		if err != nil || marker == 0 || uint32(marker) != e.marker {
 			return false, errors.New("invalid route ownership marker")
+		}
+		if iface := argument(args, "-interface"); validDevice(iface) && e.liveDevice != iface {
+			// Confirm disappearance in a successful route-table enumeration.
+			// The original descriptor normally destroys its bound routes, but
+			// a failed probe may never be treated as absence. A reused interface
+			// name is foreign and must not be changed by stale recovery.
+			family := "inet"
+			if args[2] == "-inet6" {
+				family = "inet6"
+			}
+			table, err := e.execute(ctx, command{Name: "/usr/sbin/netstat", Args: []string{"-rn", "-f", family}})
+			if err != nil {
+				return false, err
+			}
+			present, err := tableHasRouteOnInterface(table, args[4], iface)
+			if err != nil {
+				return false, err
+			}
+			if !present {
+				return false, nil
+			}
+			out, err := e.execute(ctx, command{Name: "/sbin/route", Args: []string{"-n", "get", args[2], args[3], args[4]}})
+			if err != nil {
+				return false, err
+			}
+			r := parseRoute(out)
+			if r.Interface != iface || r.Marker != e.marker || !routeFlag(r.Flags, "PROTO1") || !routeFlag(r.Flags, "PROTO2") {
+				return false, nil
+			}
+			return false, errors.New("stale utun route still has the original ownership marker; cleanup requires inspection")
 		}
 		out, err := e.execute(ctx, command{Name: "/sbin/route", Args: []string{"-n", "get", args[2], args[3], args[4]}})
 		if err != nil {
@@ -605,6 +629,32 @@ func (e systemExecutor) inspect(ctx context.Context, s step) (bool, error) {
 	default:
 		return false, errors.New("unsupported journal resource")
 	}
+}
+
+func tableHasRouteOnInterface(table []byte, target, iface string) (bool, error) {
+	target = normalizeRouteDestination(target)
+	destinationColumn, interfaceColumn := -1, -1
+	for _, line := range strings.Split(string(table), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) > 0 && fields[0] == "Destination" {
+			for i, field := range fields {
+				if field == "Destination" {
+					destinationColumn = i
+				}
+				if field == "Netif" || field == "Interface" {
+					interfaceColumn = i
+				}
+			}
+			continue
+		}
+		if destinationColumn >= 0 && interfaceColumn >= 0 && len(fields) > interfaceColumn && normalizeRouteDestination(fields[destinationColumn]) == target && fields[interfaceColumn] == iface {
+			return true, nil
+		}
+	}
+	if destinationColumn < 0 || interfaceColumn < 0 {
+		return false, errors.New("unexpected route table ownership probe")
+	}
+	return false, nil
 }
 
 func normalizeRouteDestination(value string) string {

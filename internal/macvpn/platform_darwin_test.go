@@ -492,8 +492,8 @@ func TestDeadZombieCannotOwnMarkerOnlyStop(t *testing.T) {
 	}
 }
 
-func TestStaleUtunRouteStepsCannotClaimReusedInterface(t *testing.T) {
-	p := &probeBackend{err: context.DeadlineExceeded}
+func TestStaleUtunRouteStepsRequirePositiveTableAbsence(t *testing.T) {
+	p := &probeBackend{out: []byte("Routing tables\nInternet:\nDestination Gateway Flags Netif Expire\ndefault 192.0.2.1 UGScg en0\n")}
 	for _, target := range []string{"0.0.0.0/1", "128.0.0.0/1", "::/1", "8000::/1"} {
 		family := "-inet"
 		if strings.Contains(target, ":") {
@@ -501,10 +501,37 @@ func TestStaleUtunRouteStepsCannotClaimReusedInterface(t *testing.T) {
 		}
 		s := step{Apply: command{Name: "/sbin/route", Args: []string{"-n", "add", family, "-net", target, "-interface", "utun99", "-proto1", "-proto2", "-hopcount", "123"}}}
 		if owned, err := (systemExecutor{marker: 123, backend: p}).inspect(context.Background(), s); err != nil || owned {
-			t.Fatalf("stale interface route claimed: %v", err)
+			t.Fatalf("absent stale interface route claimed: %v", err)
+		}
+		p.err = context.DeadlineExceeded
+		if _, err := (systemExecutor{marker: 123, backend: p}).inspect(context.Background(), s); err == nil {
+			t.Fatal("failed enumeration treated as absence")
+		}
+		p.err = nil
+	}
+	for _, call := range p.calls {
+		if call.Name != "/usr/sbin/netstat" {
+			t.Fatal("positively absent route was mutated or claimed")
 		}
 	}
-	if len(p.calls) != 0 {
-		t.Fatal("stale reused interface routes were probed or mutated")
+}
+func TestRouteTableExactInterfaceAndPrefixAbsence(t *testing.T) {
+	for _, tc := range []struct {
+		table, target, iface string
+		present              bool
+	}{
+		{"Destination Gateway Flags Netif Expire\n0/1 link#17 UCS utun99\n", "0.0.0.0/1", "utun99", true},
+		{"Destination Gateway Flags Netif Expire\n128.0/1 link#17 UCS utun99\n", "128.0.0.0/1", "utun99", true},
+		{"Destination Gateway Flags Netif Expire\n8000::/1 link#17 UCS utun99\n", "8000::/1", "utun99", true},
+		{"Destination Gateway Flags Netif Expire\ndefault 192.0.2.1 UG en0\n", "0.0.0.0/1", "utun99", false},
+		{"Destination Gateway Flags Netif Expire\n0/1 link#18 UCS utun98\n", "0.0.0.0/1", "utun99", false},
+	} {
+		present, err := tableHasRouteOnInterface([]byte(tc.table), tc.target, tc.iface)
+		if err != nil || present != tc.present {
+			t.Fatalf("exact table presence=%v want=%v err=%v", present, tc.present, err)
+		}
+	}
+	if _, err := tableHasRouteOnInterface([]byte("unexpected result"), "::/1", "utun99"); err == nil {
+		t.Fatal("unknown output treated as absence")
 	}
 }

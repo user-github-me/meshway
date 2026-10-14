@@ -1,0 +1,695 @@
+{
+  "created": "2026-10-14T19:10:30.050469+00:00",
+  "resource_group": "meshway-validation-20261014-191030",
+  "region": "eastasia",
+  "topology": "disposable hosted macOS VM -> one temporary Azure Meshway exit",
+  "production_resources_modified": false,
+  "development_host_network_modified": false,
+  "binary_sha256": "8804cd116a26672957ff2336b44b6827f6fcfd2852aafe7ad5a507ff40cec818",
+  "server_source_tag": "v0.1.0-alpha.1",
+  "server_version": "0.1.0-alpha.1",
+  "management": "Azure VM Run Command; no SSH connection or public API",
+  "status": "PASS",
+  "stage": "Actual hosted Mac utun cycles passed; deleting exact temporary group",
+  "deployment_state": "Succeeded",
+  "management_install_verified": true,
+  "source_commit": "5b7d5448f9e5735c31edd7fad45a458cb2a90935",
+  "workflow_run_id": 38629280142,
+  "approved_client_count": 1,
+  "workflow_conclusion": "success",
+  "previous_runs": [
+    {
+      "run_id": 38621657255,
+      "source_commit": "4d6f0124af5306856e0ebddda75c69649a4d745f",
+      "result": {
+        "date": "2026-10-14T19:12:49.298033+00:00",
+        "runner": "disposable GitHub-hosted macOS",
+        "version": "Meshway 0.1.0-alpha.2",
+        "binary_sha256": "b323ff4c60a3d651d4d0f4203d5b20a649c255a807d9a666219bc6fcad39cfb9",
+        "development_host_mutated": false,
+        "source_commit": "4d6f0124af5306856e0ebddda75c69649a4d745f",
+        "checks": {
+          "approved_remote_exit_socks_baseline": true,
+          "owned_daemon_stopped": true,
+          "final_default_routes_dns_proxy_restored": true,
+          "fresh_account_state_removed": true,
+          "temporary_vm_only_network_changes": true
+        },
+        "cycles": [],
+        "status": "FAIL",
+        "phase": "explicit-stop:native-dns",
+        "error": "Native resolver lookup exceeded20s; bounded virtual DNS route/packet diagnostics recorded.",
+        "partial_cycle": {
+          "mode": "explicit-stop",
+          "utun_active": true,
+          "ipv4_kernel_capture_route": true,
+          "ipv6_kernel_capture_route": true,
+          "virtual_dns_resolver_present": true,
+          "virtual_dns_routes": {
+            "ipv4": {
+              "interface": "utun4",
+              "owned_interface": true
+            },
+            "ipv6": {
+              "interface": "utun4",
+              "owned_interface": true
+            }
+          },
+          "native_dns_packet_counters_before": {
+            "bytes_sent": 1457,
+            "bytes_received": 3059
+          },
+          "native_dns_packet_counters_after_timeout": {
+            "bytes_sent": 6921,
+            "bytes_received": 3059
+          },
+          "controlled_virtual_dns_udp": {
+            "reply": false
+          },
+          "controlled_dns_packet_counters_after": {
+            "bytes_sent": 7997,
+            "bytes_received": 3059
+          }
+        },
+        "helper_diagnostic": {
+          "phase": "explicit-stop:native-dns",
+          "exit_code": null,
+          "last_cli_error": null
+        },
+        "packet_diagnostics": [
+          {
+            "family": 4,
+            "ipv4_header_checksum_valid": true,
+            "meshway_packet_diagnostic": true,
+            "packet_length": 87,
+            "source_is_virtual_client": true,
+            "udp_checksum": 45203,
+            "udp_checksum_valid": true,
+            "udp_length": 67
+          },
+          {
+            "family": 6,
+            "ipv4_header_checksum_valid": true,
+            "meshway_packet_diagnostic": true,
+            "packet_length": 107,
+            "source_is_virtual_client": true,
+            "udp_checksum": 60032,
+            "udp_checksum_valid": true,
+            "udp_length": 67
+          }
+        ]
+      }
+    },
+    {
+      "run_id": 38625395288,
+      "source_commit": "20f39b18d53147ee744e3941538682df67e35656",
+      "result": {
+        "date": "2026-10-14T19:39:28.824718+00:00",
+        "runner": "disposable GitHub-hosted macOS",
+        "version": "Meshway 0.1.0-alpha.2",
+        "binary_sha256": "b323ff4c60a3d651d4d0f4203d5b20a649c255a807d9a666219bc6fcad39cfb9",
+        "development_host_mutated": false,
+        "source_commit": "20f39b18d53147ee744e3941538682df67e35656",
+        "checks": {
+          "approved_remote_exit_socks_baseline": true,
+          "owned_daemon_stopped": true,
+          "final_default_routes_dns_proxy_restored": true,
+          "fresh_account_state_removed": true,
+          "temporary_vm_only_network_changes": true
+        },
+        "cycles": [],
+        "status": "FAIL",
+        "phase": "explicit-stop:helper-setup",
+        "error": "Encrypted peer underlay no longer bypasses packet capture.",
+        "partial_cycle": {
+          "mode": "explicit-stop",
+          "utun_active": true,
+          "transport_underlay_route": {
+            "interface": "utun4",
+            "bypasses_owned_utun": false
+          }
+        },
+        "helper_diagnostic": {
+          "phase": "explicit-stop:helper-setup",
+          "exit_code": null,
+          "last_cli_error": null
+        },
+        "packet_diagnostics": [
+          {
+            "family": 4,
+            "ipv4_header_checksum_valid": true,
+            "meshway_packet_diagnostic": true,
+            "packet_length": 87,
+            "source_is_virtual_client": true,
+            "udp_checksum": 38316,
+            "udp_checksum_valid": true,
+            "udp_length": 67
+          }
+        ]
+      }
+    },
+    {
+      "run_id": 38626601014,
+      "source_commit": "ac787f1663518247eda801acd354449755780158",
+      "result": {
+        "date": "2026-10-14T19:48:14.307652+00:00",
+        "runner": "disposable GitHub-hosted macOS",
+        "version": "Meshway 0.1.0-alpha.2",
+        "binary_sha256": "3bd6040f21950155496e15d8e74e0f131db701b57f4b4cf28730a69821347531",
+        "development_host_mutated": false,
+        "source_commit": "ac787f1663518247eda801acd354449755780158",
+        "checks": {
+          "approved_remote_exit_socks_baseline": true,
+          "remote_raw_packet_dns_before_capture": true,
+          "owned_daemon_stopped": true,
+          "final_default_routes_dns_proxy_restored": true,
+          "fresh_account_state_removed": true,
+          "temporary_vm_only_network_changes": true
+        },
+        "cycles": [
+          {
+            "mode": "explicit-stop",
+            "utun_active": true,
+            "transport_underlay_route": {
+              "interface": "en0",
+              "bypasses_owned_utun": true
+            },
+            "ipv4_kernel_capture_route": true,
+            "ipv6_kernel_capture_route": true,
+            "virtual_dns_resolver_present": true,
+            "virtual_dns_routes": {
+              "ipv4": {
+                "interface": "utun4",
+                "owned_interface": true
+              },
+              "ipv6": {
+                "interface": "utun4",
+                "owned_interface": true
+              }
+            },
+            "native_dns_packet_counters_before": {
+              "bytes_sent": 1812,
+              "bytes_received": 4813
+            },
+            "native_dns_lookup": true,
+            "native_dns_generated_meshway_packet_traffic": true,
+            "kernel_tcp_tls_expected_exit_ip": true,
+            "kernel_public_https": true,
+            "packet_diagnostics": [
+              {
+                "family": 4,
+                "ipv4_header_checksum_valid": true,
+                "meshway_packet_diagnostic": true,
+                "packet_length": 87,
+                "source_is_virtual_client": true,
+                "udp_checksum": 4262,
+                "udp_checksum_valid": true,
+                "udp_length": 67
+              }
+            ],
+            "daemon_packet_session_inactive": true,
+            "default_routes_dns_proxy_restored": true,
+            "no_active_helper_or_cleanup_pending": true
+          },
+          {
+            "mode": "owner-process-exit",
+            "utun_active": true,
+            "transport_underlay_route": {
+              "interface": "en0",
+              "bypasses_owned_utun": true
+            },
+            "ipv4_kernel_capture_route": true,
+            "ipv6_kernel_capture_route": true,
+            "virtual_dns_resolver_present": true,
+            "virtual_dns_routes": {
+              "ipv4": {
+                "interface": "utun4",
+                "owned_interface": true
+              },
+              "ipv6": {
+                "interface": "utun4",
+                "owned_interface": true
+              }
+            },
+            "native_dns_packet_counters_before": {
+              "bytes_sent": 8831,
+              "bytes_received": 23543
+            },
+            "native_dns_lookup": true,
+            "native_dns_generated_meshway_packet_traffic": true,
+            "kernel_tcp_tls_expected_exit_ip": true,
+            "kernel_public_https": true,
+            "automatic_parent_exit_cleanup": true,
+            "packet_diagnostics": [
+              {
+                "family": 4,
+                "ipv4_header_checksum_valid": true,
+                "meshway_packet_diagnostic": true,
+                "packet_length": 87,
+                "source_is_virtual_client": true,
+                "udp_checksum": 54844,
+                "udp_checksum_valid": true,
+                "udp_length": 67
+              }
+            ],
+            "daemon_packet_session_inactive": true,
+            "default_routes_dns_proxy_restored": true,
+            "no_active_helper_or_cleanup_pending": true
+          }
+        ],
+        "status": "FAIL",
+        "phase": "helper-sigkill-explicit-recovery:owned-cleanup",
+        "error": "Owned helper retained cleanup state.",
+        "partial_cycle": {
+          "mode": "helper-sigkill-explicit-recovery",
+          "utun_active": true,
+          "transport_underlay_route": {
+            "interface": "en0",
+            "bypasses_owned_utun": true
+          },
+          "ipv4_kernel_capture_route": true,
+          "ipv6_kernel_capture_route": true,
+          "virtual_dns_resolver_present": true,
+          "virtual_dns_routes": {
+            "ipv4": {
+              "interface": "utun4",
+              "owned_interface": true
+            },
+            "ipv6": {
+              "interface": "utun4",
+              "owned_interface": true
+            }
+          },
+          "native_dns_packet_counters_before": {
+            "bytes_sent": 21308,
+            "bytes_received": 51619
+          },
+          "native_dns_lookup": true,
+          "native_dns_generated_meshway_packet_traffic": true,
+          "kernel_tcp_tls_expected_exit_ip": true,
+          "kernel_public_https": true,
+          "packet_diagnostics": [
+            {
+              "family": 4,
+              "ipv4_header_checksum_valid": true,
+              "meshway_packet_diagnostic": true,
+              "packet_length": 87,
+              "source_is_virtual_client": true,
+              "udp_checksum": 50469,
+              "udp_checksum_valid": true,
+              "udp_length": 67
+            }
+          ],
+          "daemon_packet_session_inactive": true,
+          "default_routes_dns_proxy_restored": true,
+          "no_active_helper_or_cleanup_pending": false
+        },
+        "helper_diagnostic": {
+          "phase": "helper-sigkill-explicit-recovery:owned-cleanup",
+          "exit_code": null,
+          "last_cli_error": null
+        },
+        "packet_diagnostics": [
+          {
+            "family": 4,
+            "ipv4_header_checksum_valid": true,
+            "meshway_packet_diagnostic": true,
+            "packet_length": 87,
+            "source_is_virtual_client": true,
+            "udp_checksum": 50469,
+            "udp_checksum_valid": true,
+            "udp_length": 67
+          }
+        ]
+      }
+    },
+    {
+      "run_id": 38628228662,
+      "source_commit": "82f598243002f0175794a78ba163c94f2b20eb56",
+      "result": {
+        "date": "2026-10-14T19:59:55.628134+00:00",
+        "runner": "disposable GitHub-hosted macOS",
+        "version": "Meshway 0.1.0-alpha.2",
+        "binary_sha256": "8074c5e52b4983d00ca395daefb99a4fe3124bc61d1a8b9fdfc2bba14bffaa2d",
+        "development_host_mutated": false,
+        "source_commit": "82f598243002f0175794a78ba163c94f2b20eb56",
+        "checks": {
+          "approved_remote_exit_socks_baseline": true,
+          "remote_raw_packet_dns_before_capture": true,
+          "owned_daemon_stopped": true,
+          "final_default_routes_dns_proxy_restored": true,
+          "fresh_account_state_removed": true,
+          "temporary_vm_only_network_changes": true
+        },
+        "cycles": [
+          {
+            "mode": "explicit-stop",
+            "utun_active": true,
+            "transport_underlay_route": {
+              "interface": "en0",
+              "bypasses_owned_utun": true
+            },
+            "ipv4_kernel_capture_route": true,
+            "ipv6_kernel_capture_route": true,
+            "virtual_dns_resolver_present": true,
+            "virtual_dns_routes": {
+              "ipv4": {
+                "interface": "utun4",
+                "owned_interface": true
+              },
+              "ipv6": {
+                "interface": "utun4",
+                "owned_interface": true
+              }
+            },
+            "native_dns_packet_counters_before": {
+              "bytes_sent": 1534,
+              "bytes_received": 4142
+            },
+            "native_dns_lookup": true,
+            "native_dns_generated_meshway_packet_traffic": true,
+            "kernel_tcp_tls_expected_exit_ip": true,
+            "kernel_public_https": true,
+            "packet_diagnostics": [
+              {
+                "family": 4,
+                "ipv4_header_checksum_valid": true,
+                "meshway_packet_diagnostic": true,
+                "packet_length": 87,
+                "source_is_virtual_client": true,
+                "udp_checksum": 2465,
+                "udp_checksum_valid": true,
+                "udp_length": 67
+              }
+            ],
+            "daemon_packet_session_inactive": true,
+            "default_routes_dns_proxy_restored": true,
+            "no_active_helper_or_cleanup_pending": true
+          },
+          {
+            "mode": "owner-process-exit",
+            "utun_active": true,
+            "transport_underlay_route": {
+              "interface": "en0",
+              "bypasses_owned_utun": true
+            },
+            "ipv4_kernel_capture_route": true,
+            "ipv6_kernel_capture_route": true,
+            "virtual_dns_resolver_present": true,
+            "virtual_dns_routes": {
+              "ipv4": {
+                "interface": "utun4",
+                "owned_interface": true
+              },
+              "ipv6": {
+                "interface": "utun4",
+                "owned_interface": true
+              }
+            },
+            "native_dns_packet_counters_before": {
+              "bytes_sent": 7790,
+              "bytes_received": 22460
+            },
+            "native_dns_lookup": true,
+            "native_dns_generated_meshway_packet_traffic": true,
+            "kernel_tcp_tls_expected_exit_ip": true,
+            "kernel_public_https": true,
+            "automatic_parent_exit_cleanup": true,
+            "packet_diagnostics": [
+              {
+                "family": 4,
+                "ipv4_header_checksum_valid": true,
+                "meshway_packet_diagnostic": true,
+                "packet_length": 87,
+                "source_is_virtual_client": true,
+                "udp_checksum": 3267,
+                "udp_checksum_valid": true,
+                "udp_length": 67
+              }
+            ],
+            "daemon_packet_session_inactive": true,
+            "default_routes_dns_proxy_restored": true,
+            "no_active_helper_or_cleanup_pending": true
+          }
+        ],
+        "status": "FAIL",
+        "phase": "helper-sigkill-explicit-recovery:owned-cleanup",
+        "error": "Owned helper retained cleanup state.",
+        "partial_cycle": {
+          "mode": "helper-sigkill-explicit-recovery",
+          "utun_active": true,
+          "transport_underlay_route": {
+            "interface": "en0",
+            "bypasses_owned_utun": true
+          },
+          "ipv4_kernel_capture_route": true,
+          "ipv6_kernel_capture_route": true,
+          "virtual_dns_resolver_present": true,
+          "virtual_dns_routes": {
+            "ipv4": {
+              "interface": "utun4",
+              "owned_interface": true
+            },
+            "ipv6": {
+              "interface": "utun4",
+              "owned_interface": true
+            }
+          },
+          "native_dns_packet_counters_before": {
+            "bytes_sent": 23680,
+            "bytes_received": 56561
+          },
+          "native_dns_lookup": true,
+          "native_dns_generated_meshway_packet_traffic": true,
+          "kernel_tcp_tls_expected_exit_ip": true,
+          "kernel_public_https": true,
+          "packet_diagnostics": [
+            {
+              "family": 4,
+              "ipv4_header_checksum_valid": true,
+              "meshway_packet_diagnostic": true,
+              "packet_length": 87,
+              "source_is_virtual_client": true,
+              "udp_checksum": 621,
+              "udp_checksum_valid": true,
+              "udp_length": 67
+            }
+          ],
+          "daemon_packet_session_inactive": true,
+          "default_routes_dns_proxy_restored": true,
+          "no_active_helper_or_cleanup_pending": false,
+          "cleanup_state": {
+            "active": false,
+            "running": false,
+            "network_cleanup_pending": true
+          },
+          "cleanup_remaining_resources": [
+            {
+              "command": "route",
+              "kind": "-net"
+            },
+            {
+              "command": "route",
+              "kind": "-net"
+            },
+            {
+              "command": "route",
+              "kind": "-net"
+            },
+            {
+              "command": "route",
+              "kind": "-net"
+            }
+          ]
+        },
+        "helper_diagnostic": {
+          "phase": "helper-sigkill-explicit-recovery:owned-cleanup",
+          "exit_code": null,
+          "last_cli_error": null
+        },
+        "packet_diagnostics": [
+          {
+            "family": 4,
+            "ipv4_header_checksum_valid": true,
+            "meshway_packet_diagnostic": true,
+            "packet_length": 87,
+            "source_is_virtual_client": true,
+            "udp_checksum": 621,
+            "udp_checksum_valid": true,
+            "udp_length": 67
+          }
+        ]
+      }
+    }
+  ],
+  "native_runtime": {
+    "date": "2026-10-14T20:07:21.919345+00:00",
+    "runner": "disposable GitHub-hosted macOS",
+    "version": "Meshway 0.1.0-alpha.2",
+    "binary_sha256": "e8e24f8d51c6275a4676b59d5b95282382068511bb4d6eddfc1493bc40f14202",
+    "development_host_mutated": false,
+    "source_commit": "5b7d5448f9e5735c31edd7fad45a458cb2a90935",
+    "checks": {
+      "approved_remote_exit_socks_baseline": true,
+      "remote_raw_packet_dns_before_capture": true,
+      "owned_daemon_stopped": true,
+      "final_default_routes_dns_proxy_restored": true,
+      "fresh_account_state_removed": true,
+      "temporary_vm_only_network_changes": true
+    },
+    "cycles": [
+      {
+        "mode": "explicit-stop",
+        "utun_active": true,
+        "transport_underlay_route": {
+          "interface": "en0",
+          "bypasses_owned_utun": true
+        },
+        "ipv4_kernel_capture_route": true,
+        "ipv6_kernel_capture_route": true,
+        "virtual_dns_resolver_present": true,
+        "virtual_dns_routes": {
+          "ipv4": {
+            "interface": "utun4",
+            "owned_interface": true
+          },
+          "ipv6": {
+            "interface": "utun4",
+            "owned_interface": true
+          }
+        },
+        "native_dns_packet_counters_before": {
+          "bytes_sent": 2056,
+          "bytes_received": 5495
+        },
+        "native_dns_lookup": true,
+        "native_dns_generated_meshway_packet_traffic": true,
+        "kernel_tcp_tls_expected_exit_ip": true,
+        "kernel_public_https": true,
+        "packet_diagnostics": [
+          {
+            "family": 4,
+            "ipv4_header_checksum_valid": true,
+            "meshway_packet_diagnostic": true,
+            "packet_length": 87,
+            "source_is_virtual_client": true,
+            "udp_checksum": 21035,
+            "udp_checksum_valid": true,
+            "udp_length": 67
+          }
+        ],
+        "daemon_packet_session_inactive": true,
+        "default_routes_dns_proxy_restored": true,
+        "no_active_helper_or_cleanup_pending": true
+      },
+      {
+        "mode": "owner-process-exit",
+        "utun_active": true,
+        "transport_underlay_route": {
+          "interface": "en0",
+          "bypasses_owned_utun": true
+        },
+        "ipv4_kernel_capture_route": true,
+        "ipv6_kernel_capture_route": true,
+        "virtual_dns_resolver_present": true,
+        "virtual_dns_routes": {
+          "ipv4": {
+            "interface": "utun4",
+            "owned_interface": true
+          },
+          "ipv6": {
+            "interface": "utun4",
+            "owned_interface": true
+          }
+        },
+        "native_dns_packet_counters_before": {
+          "bytes_sent": 8060,
+          "bytes_received": 22481
+        },
+        "native_dns_lookup": true,
+        "native_dns_generated_meshway_packet_traffic": true,
+        "kernel_tcp_tls_expected_exit_ip": true,
+        "kernel_public_https": true,
+        "automatic_parent_exit_cleanup": true,
+        "packet_diagnostics": [
+          {
+            "family": 4,
+            "ipv4_header_checksum_valid": true,
+            "meshway_packet_diagnostic": true,
+            "packet_length": 87,
+            "source_is_virtual_client": true,
+            "udp_checksum": 44789,
+            "udp_checksum_valid": true,
+            "udp_length": 67
+          }
+        ],
+        "daemon_packet_session_inactive": true,
+        "default_routes_dns_proxy_restored": true,
+        "no_active_helper_or_cleanup_pending": true
+      },
+      {
+        "mode": "helper-sigkill-explicit-recovery",
+        "utun_active": true,
+        "transport_underlay_route": {
+          "interface": "en0",
+          "bypasses_owned_utun": true
+        },
+        "ipv4_kernel_capture_route": true,
+        "ipv6_kernel_capture_route": true,
+        "virtual_dns_resolver_present": true,
+        "virtual_dns_routes": {
+          "ipv4": {
+            "interface": "utun4",
+            "owned_interface": true
+          },
+          "ipv6": {
+            "interface": "utun4",
+            "owned_interface": true
+          }
+        },
+        "native_dns_packet_counters_before": {
+          "bytes_sent": 21126,
+          "bytes_received": 50335
+        },
+        "native_dns_lookup": true,
+        "native_dns_generated_meshway_packet_traffic": true,
+        "kernel_tcp_tls_expected_exit_ip": true,
+        "kernel_public_https": true,
+        "packet_diagnostics": [
+          {
+            "family": 4,
+            "ipv4_header_checksum_valid": true,
+            "meshway_packet_diagnostic": true,
+            "packet_length": 87,
+            "source_is_virtual_client": true,
+            "udp_checksum": 42766,
+            "udp_checksum_valid": true,
+            "udp_length": 67
+          }
+        ],
+        "daemon_packet_session_inactive": true,
+        "default_routes_dns_proxy_restored": true,
+        "no_active_helper_or_cleanup_pending": true
+      }
+    ],
+    "status": "PASS",
+    "ipv6_internet_limitation": "Actual IPv6 kernel capture route verified; public IPv6 egress requires a separately dual-stack exit and is not asserted here.",
+    "crash_limitation": "SIGKILL recovery invokes explicit privileged Stop; no persistent crash firewall kill switch is claimed.",
+    "packet_diagnostics": [
+      {
+        "family": 4,
+        "ipv4_header_checksum_valid": true,
+        "meshway_packet_diagnostic": true,
+        "packet_length": 87,
+        "source_is_virtual_client": true,
+        "udp_checksum": 42766,
+        "udp_checksum_valid": true,
+        "udp_length": 67
+      }
+    ]
+  },
+  "temporary_resource_group_deleted": true,
+  "temporary_local_credentials_removed": true,
+  "finished": "2026-10-14T20:12:12.584828+00:00",
+  "scope": "disposable hosted Mac actual utun capture to temporary public Azure exit; three traffic/cleanup cycles"
+}

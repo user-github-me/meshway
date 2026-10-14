@@ -51,56 +51,76 @@ try:
   except OSError:time.sleep(.2)
  else:raise RuntimeError('loopback peers did not start')
  api(client,'/v1/connect',{'address':ss['addresses'][0]});api(client,'/v1/select',{'peer_id':ss['peer_id']})
- owner=subprocess.Popen([sys.executable,'-c','import time;time.sleep(180)'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
- log=open(STATE/'helper.private.log','wb');os.chmod(log.name,0o600)
- helper=subprocess.Popen(['/usr/bin/sudo','-n','/usr/bin/env','GITHUB_ACTIONS=true','MESHWAY_DISPOSABLE_MACOS_VM=1','MESHWAY_UTUN_PACKET_DIAGNOSTICS=1',str(BINARY),'vpn','start','--config',str(cp.resolve()),'--peer',ss['peer_id'],'--underlay-ips','192.0.2.123','--parent-pid',str(owner.pid)],stdout=log,stderr=log)
- for _ in range(100):
-  if helper.poll() is not None:raise RuntimeError('full helper setup exited: '+str(lab.safe_helper_failure(pathlib.Path(log.name))))
-  current=lab.run(['/usr/bin/sudo','-n',BINARY,'vpn','status','--config',cp.resolve()],check=False)
-  try:
-   if json.loads(current.stdout).get('active'):device=json.loads(current.stdout)['device'];break
-  except ValueError:pass
-  time.sleep(.2)
- else:raise RuntimeError('full helper setup not confirmed')
- proof['checks']['full_helper_verified_setup']=True
- for family,target in [('ipv4','10.77.0.1'),('ipv6','fd77::1')]:
-  route=lab.run(['/sbin/route','-n','get',*(['-inet6'] if family=='ipv6' else []),target]).stdout
-  proof['checks'][family+'_virtual_dns_route']=('interface: '+device in route)
- before_dns=api(client,'/v1/status');before_server=api(server,'/v1/status')
- s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.settimeout(6)
- q=struct.pack('!HHHHHH',18723,256,1,0,0,0)+b'\x07example\x03com\x00'+struct.pack('!HH',1,1)
- s.sendto(q,('10.77.0.1',53))
- try:a,_=s.recvfrom(1500);proof['checks']['full_helper_unbound_udp_dns_reply']=len(a)>=12 and struct.unpack('!H',a[:2])[0]==18723
- except OSError:proof['checks']['full_helper_unbound_udp_dns_reply']=False
- s.close();after=api(client,'/v1/status');proof['packet_counters']={'sent_delta':after['bytes_sent']-before_dns['bytes_sent'],'received_delta':after['bytes_received']-before_dns['bytes_received']}
- after_server=api(server,'/v1/status');proof['server_packet_counters']={'sent_delta':after_server['bytes_sent']-before_server['bytes_sent'],'received_delta':after_server['bytes_received']-before_server['bytes_received']}
- proof['mock_dns_queries_received']=int(dns_counter.read_text()) if dns_counter.exists() else 0
- if not proof['checks']['full_helper_unbound_udp_dns_reply']:raise RuntimeError('full helper UDP DNS has no reply')
- concurrent=[]
- def dns_probe(family,index):
-  sock=socket.socket(family,socket.SOCK_DGRAM);sock.settimeout(6)
-  ident=20000+index;query=struct.pack('!HHHHHH',ident,256,1,0,0,0)+b'\x07example\x03com\x00'+struct.pack('!HH',1,1)
-  try:
-   sock.sendto(query,('10.77.0.1' if family==socket.AF_INET else 'fd77::1',53));answer,_=sock.recvfrom(1500);concurrent.append({'family':4 if family==socket.AF_INET else 6,'reply':len(answer)>=12 and struct.unpack('!H',answer[:2])[0]==ident})
-  except OSError:concurrent.append({'family':4 if family==socket.AF_INET else 6,'reply':False})
-  finally:sock.close()
- workers=[threading.Thread(target=dns_probe,args=(socket.AF_INET if i%2==0 else socket.AF_INET6,i)) for i in range(12)]
- for worker in workers:worker.start()
- for worker in workers:worker.join(timeout=8)
- proof['concurrent_dns']=concurrent
- proof['checks']['concurrent_ipv4_ipv6_dns_replies']=len(concurrent)==12 and all(item['reply'] for item in concurrent)
- if not proof['checks']['concurrent_ipv4_ipv6_dns_replies']:raise RuntimeError('concurrent IPv4/IPv6 virtual DNS reply failed')
- native_before=api(client,'/v1/status')
- p=lab.run([sys.executable,'-c','import socket,sys\ntry:socket.getaddrinfo(sys.argv[1],443)\nexcept socket.gaierror:pass','meshway-'+uuid.uuid4().hex+'.example.com'],timeout=20,check=False)
- native_after=api(client,'/v1/status')
- proof['checks']['native_resolver_completed']=p.returncode==0
- proof['checks']['native_resolver_encrypted_traffic']=native_after['bytes_sent']>native_before['bytes_sent'] and native_after['bytes_received']>native_before['bytes_received']
+ proof['cycles']=[]
+ for mode in ['explicit-stop','owner-process-exit','helper-sigkill-explicit-recovery']:
+  owner=subprocess.Popen([sys.executable,'-c','import time;time.sleep(180)'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+  log=open(STATE/(mode+'.helper.private.log'),'wb');os.chmod(log.name,0o600)
+  helper=subprocess.Popen(['/usr/bin/sudo','-n','/usr/bin/env','GITHUB_ACTIONS=true','MESHWAY_DISPOSABLE_MACOS_VM=1','MESHWAY_UTUN_PACKET_DIAGNOSTICS=1',str(BINARY),'vpn','start','--config',str(cp.resolve()),'--peer',ss['peer_id'],'--underlay-ips','192.0.2.123','--parent-pid',str(owner.pid)],stdout=log,stderr=log)
+  for _ in range(100):
+   if helper.poll() is not None:raise RuntimeError('full helper setup exited: '+str(lab.safe_helper_failure(pathlib.Path(log.name))))
+   current=lab.run(['/usr/bin/sudo','-n',BINARY,'vpn','status','--config',cp.resolve()],check=False)
+   try:
+    if json.loads(current.stdout).get('active'):device=json.loads(current.stdout)['device'];break
+   except ValueError:pass
+   time.sleep(.2)
+  else:raise RuntimeError('full helper setup not confirmed')
+  proof['checks']['full_helper_verified_setup']=True
+  for family,target in [('ipv4','10.77.0.1'),('ipv6','fd77::1')]:
+   route=lab.run(['/sbin/route','-n','get',*(['-inet6'] if family=='ipv6' else []),target]).stdout
+   proof['checks'][family+'_virtual_dns_route']=('interface: '+device in route)
+  before_dns=api(client,'/v1/status');before_server=api(server,'/v1/status')
+  s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.settimeout(6)
+  q=struct.pack('!HHHHHH',18723,256,1,0,0,0)+b'\x07example\x03com\x00'+struct.pack('!HH',1,1)
+  s.sendto(q,('10.77.0.1',53))
+  try:a,_=s.recvfrom(1500);proof['checks']['full_helper_unbound_udp_dns_reply']=len(a)>=12 and struct.unpack('!H',a[:2])[0]==18723
+  except OSError:proof['checks']['full_helper_unbound_udp_dns_reply']=False
+  s.close();after=api(client,'/v1/status');proof['packet_counters']={'sent_delta':after['bytes_sent']-before_dns['bytes_sent'],'received_delta':after['bytes_received']-before_dns['bytes_received']}
+  after_server=api(server,'/v1/status');proof['server_packet_counters']={'sent_delta':after_server['bytes_sent']-before_server['bytes_sent'],'received_delta':after_server['bytes_received']-before_server['bytes_received']}
+  proof['mock_dns_queries_received']=int(dns_counter.read_text()) if dns_counter.exists() else 0
+  if not proof['checks']['full_helper_unbound_udp_dns_reply']:raise RuntimeError('full helper UDP DNS has no reply')
+  concurrent=[]
+  def dns_probe(family,index):
+   sock=socket.socket(family,socket.SOCK_DGRAM);sock.settimeout(6)
+   ident=20000+index;query=struct.pack('!HHHHHH',ident,256,1,0,0,0)+b'\x07example\x03com\x00'+struct.pack('!HH',1,1)
+   try:
+    sock.sendto(query,('10.77.0.1' if family==socket.AF_INET else 'fd77::1',53));answer,_=sock.recvfrom(1500);concurrent.append({'family':4 if family==socket.AF_INET else 6,'reply':len(answer)>=12 and struct.unpack('!H',answer[:2])[0]==ident})
+   except OSError:concurrent.append({'family':4 if family==socket.AF_INET else 6,'reply':False})
+   finally:sock.close()
+  workers=[threading.Thread(target=dns_probe,args=(socket.AF_INET if i%2==0 else socket.AF_INET6,i)) for i in range(12)]
+  for worker in workers:worker.start()
+  for worker in workers:worker.join(timeout=8)
+  proof['concurrent_dns']=concurrent
+  proof['checks']['concurrent_ipv4_ipv6_dns_replies']=len(concurrent)==12 and all(item['reply'] for item in concurrent)
+  if not proof['checks']['concurrent_ipv4_ipv6_dns_replies']:raise RuntimeError('concurrent IPv4/IPv6 virtual DNS reply failed')
+  native_before=api(client,'/v1/status')
+  p=lab.run([sys.executable,'-c','import socket,sys\ntry:socket.getaddrinfo(sys.argv[1],443)\nexcept socket.gaierror:pass','meshway-'+uuid.uuid4().hex+'.example.com'],timeout=20,check=False)
+  native_after=api(client,'/v1/status')
+  proof['checks']['native_resolver_completed']=p.returncode==0
+  proof['checks']['native_resolver_encrypted_traffic']=native_after['bytes_sent']>native_before['bytes_sent'] and native_after['bytes_received']>native_before['bytes_received']
+  cycle={'mode':mode}
+  if mode=='owner-process-exit':
+   owner.terminate();owner.wait(timeout=5);helper.wait(timeout=105);cycle['automatic_parent_exit_cleanup']=True
+  elif mode=='helper-sigkill-explicit-recovery':
+   journal=json.loads(lab.run(['/usr/bin/sudo','-n','/bin/cat','/private/var/db/meshway-macvpn/journal.json']).stdout)
+   lab.run(['/usr/bin/sudo','-n','/bin/kill','-KILL',str(journal['pid'])])
+  stop=lab.run(['/usr/bin/sudo','-n',BINARY,'vpn','stop','--config',cp.resolve()],timeout=105,check=False)
+  helper.wait(timeout=105)
+  status=lab.run(['/usr/bin/sudo','-n',BINARY,'vpn','status','--config',cp.resolve()],timeout=15,check=False)
+  state=json.loads(status.stdout);cycle['journal_inactive']=not state.get('active') and not state.get('running') and not state.get('network_cleanup_pending')
+  vpn_status=api(client,'/v1/status');cycle['packet_session_inactive']=not vpn_status.get('vpn',{}).get('active') and not vpn_status.get('vpn',{}).get('peer_id')
+  cycle['stop_accepted']=stop.returncode==0;cycle['baseline_restored']=lab.baseline()==before
+  cycle['native_dns_encrypted_traffic']=proof['checks']['native_resolver_encrypted_traffic'];cycle['concurrent_ipv4_ipv6_dns_replies']=proof['checks']['concurrent_ipv4_ipv6_dns_replies']
+  proof['cycles'].append(cycle)
+  if not all(value for key,value in cycle.items() if key!='mode'):raise RuntimeError('full helper cleanup cycle failed: '+mode)
+  helper=None
+  if owner.poll() is None:owner.terminate();owner.wait(timeout=5)
+  owner=None;log.close()
  proof['status']='PASS'
 except Exception as e:proof['error']=str(e)
 finally:
  if helper:
   try:
-   lines=pathlib.Path(STATE/'helper.private.log').read_text().splitlines()
+   lines=pathlib.Path(log.name).read_text().splitlines()
    proof['packet_diagnostics']=[json.loads(l) for l in lines if l.startswith('{"meshway_packet_diagnostic":') or ('meshway_packet_diagnostic' in l and l.startswith('{'))][:8]
   except (OSError,ValueError):pass
   stop=lab.run(['/usr/bin/sudo','-n',BINARY,'vpn','stop','--config',cp.resolve()],timeout=105,check=False)

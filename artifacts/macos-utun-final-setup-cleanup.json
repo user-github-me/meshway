@@ -1,0 +1,13 @@
+{
+  "status": "SETUP_BLOCKED",
+  "scope": "temporary exit provisioning; no hosted Mac VPN run dispatched",
+  "resource_group": "meshway-validation-20261014-184334",
+  "created": "2026-10-14T18:43:34.898940+00:00",
+  "finished": "2026-10-14T18:53:25.993304+00:00",
+  "ssh_attempts": 30,
+  "source_ipv4_restriction_rechecked": true,
+  "development_host_network_modified": false,
+  "production_resources_modified": false,
+  "temporary_resource_group_deleted": true,
+  "temporary_local_credentials_removed": true
+}
