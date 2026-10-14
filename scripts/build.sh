@@ -16,6 +16,6 @@ for target in $targets; do
   if [ "$target_os" = windows ]; then suffix=.exe; fi
   output=dist/bin/meshway-$target_os-$target_arch$suffix
   printf 'Building %s\n' "$output"
-  CGO_ENABLED=0 GOOS=$target_os GOARCH=$target_arch "$go_command" build -trimpath -ldflags='-s -w' -o "$output" ./cmd/meshway
+  CGO_ENABLED=0 GOOS=$target_os GOARCH=$target_arch "$go_command" build -buildvcs=false -trimpath -ldflags='-s -w' -o "$output" ./cmd/meshway
 done
 if [ "${1:-}" != "--all" ]; then cp "$output" dist/meshway$suffix; fi
