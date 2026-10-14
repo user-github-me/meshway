@@ -1,0 +1,35 @@
+name: Disposable macOS utun packet headers
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Exact source commit to build
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  packet-headers:
+    runs-on: macos-14
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.2'
+      - name: Build opt-in isolated real kernel test
+        run: |
+          mkdir -p .tools/utun-headers
+          go test -c -o .tools/utun-headers/macvpn.test ./internal/macvpn
+      - name: Capture only fixed private UDP header metadata
+        run: |
+          sudo -n /usr/bin/env GITHUB_ACTIONS=true MESHWAY_DISPOSABLE_MACOS_VM=1 MESHWAY_UTUN_HEADER_LAB=1 MESHWAY_UTUN_HEADER_OUTPUT="$PWD/.tools/utun-headers" .tools/utun-headers/macvpn.test -test.run '^TestHostedUTUNKernelUDPMetadata$' -test.v -test.timeout=120s
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: macos-utun-header-metadata
+          path: .tools/utun-headers/utun-header.json
+          include-hidden-files: true
+          if-no-files-found: warn

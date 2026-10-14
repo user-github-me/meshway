@@ -1,0 +1,178 @@
+{
+  "created": "2026-10-14T15:03:11.283198+00:00",
+  "resource_group": "meshway-validation-20261014-150311",
+  "region": "eastasia",
+  "topology": "disposable hosted macOS VM -> one temporary Azure Meshway exit",
+  "production_resources_modified": false,
+  "development_host_network_modified": false,
+  "binary_sha256": "b79a9305b849301a066af3b0a794759423e1e3d3d9bbe191b5bc5e7e99033e5a",
+  "status": "PARTIAL_RUNTIME_FAILED_NATIVE_DNS",
+  "stage": "Validation did not pass; cleaning only the exact owned temporary group",
+  "deployment_state": "Succeeded",
+  "source_commit": "461b51a4fc4386499f1602d501fb0efa90c2a15f",
+  "workflow_run_id": 38593555080,
+  "approved_client_count": 1,
+  "workflow_conclusion": "failure",
+  "previous_runs": [
+    {
+      "run_id": 38586240320,
+      "source_commit": "37c43719c7e6a3fbd8f25b9e2be2d49d377149f4",
+      "result": {
+        "date": "2026-10-14T15:06:03.631165+00:00",
+        "runner": "disposable GitHub-hosted macOS",
+        "version": "Meshway 0.1.0-alpha.2",
+        "binary_sha256": "f3ec86b511a33af8d0d470617232d00b7e0e27e81faede0212eea8199a09c156",
+        "development_host_mutated": false,
+        "checks": {
+          "approved_remote_exit_socks_baseline": true,
+          "owned_daemon_stopped": true,
+          "final_default_routes_dns_proxy_restored": true,
+          "fresh_account_state_removed": true,
+          "temporary_vm_only_network_changes": true
+        },
+        "cycles": [],
+        "status": "FAIL",
+        "error": "Actual utun helper did not confirm setup; private helper diagnostics retained."
+      }
+    },
+    {
+      "run_id": 38588580091,
+      "source_commit": "dff005f9b1317c5244cf4dfc3facdcf33634d7d0",
+      "result": {
+        "date": "2026-10-14T15:22:16.198541+00:00",
+        "runner": "disposable GitHub-hosted macOS",
+        "version": "Meshway 0.1.0-alpha.2",
+        "binary_sha256": "f3ec86b511a33af8d0d470617232d00b7e0e27e81faede0212eea8199a09c156",
+        "development_host_mutated": false,
+        "checks": {
+          "approved_remote_exit_socks_baseline": true,
+          "owned_daemon_stopped": true,
+          "final_default_routes_dns_proxy_restored": true,
+          "fresh_account_state_removed": true,
+          "temporary_vm_only_network_changes": true
+        },
+        "cycles": [],
+        "helper_diagnostic": {
+          "phase": "explicit-stop:helper-setup",
+          "exit_code": 1,
+          "last_cli_error": "meshway: network setup ownership could not be verified; restoring the owned changes"
+        },
+        "status": "FAIL",
+        "phase": "explicit-stop:helper-setup",
+        "error": "Actual utun helper did not confirm setup; bounded CLI diagnostic recorded."
+      }
+    },
+    {
+      "run_id": 38590145432,
+      "source_commit": "070f2fc12bcc30fe250ca3572b7e42d6433a70ee",
+      "result": {
+        "date": "2026-10-14T15:32:41.927880+00:00",
+        "runner": "disposable GitHub-hosted macOS",
+        "version": "Meshway 0.1.0-alpha.2",
+        "binary_sha256": "6d67ac45c44875ec93083dccd209ab1dbccc0f0f8fdfb11bd7f0465e5df2d099",
+        "development_host_mutated": false,
+        "checks": {
+          "approved_remote_exit_socks_baseline": true,
+          "owned_daemon_stopped": true,
+          "final_default_routes_dns_proxy_restored": true,
+          "fresh_account_state_removed": true,
+          "temporary_vm_only_network_changes": true
+        },
+        "cycles": [],
+        "helper_diagnostic": {
+          "phase": "explicit-stop:helper-setup",
+          "exit_code": 1,
+          "last_cli_error": "meshway: network setup ownership could not be verified (route family=-inet target=0.0.0.0/1 destination=default mask=128.0.0.0 interface=utun4 flags=<UP,DONE,STATIC,PROTO2,PROTO1,PRCLONING,GLOBAL> marker=1971273528 expected_marker=1971273528); restoring the owned changes"
+        },
+        "status": "FAIL",
+        "phase": "explicit-stop:helper-setup",
+        "error": "Actual utun helper did not confirm setup; bounded CLI diagnostic recorded."
+      }
+    },
+    {
+      "run_id": 38591882755,
+      "source_commit": "a690f08af88aba1923196f10ead38eb5eb86ab34",
+      "result": {
+        "date": "2026-10-14T15:44:41.409723+00:00",
+        "runner": "disposable GitHub-hosted macOS",
+        "version": "Meshway 0.1.0-alpha.2",
+        "binary_sha256": "85301e6a9cbe98d2b04884607fd3721618787febea34a2de3baf6c66d3682571",
+        "development_host_mutated": false,
+        "checks": {
+          "approved_remote_exit_socks_baseline": true,
+          "owned_daemon_stopped": true,
+          "final_default_routes_dns_proxy_restored": true,
+          "fresh_account_state_removed": true,
+          "temporary_vm_only_network_changes": true
+        },
+        "cycles": [],
+        "status": "FAIL",
+        "phase": "explicit-stop:native-dns",
+        "error": "Command '['/opt/homebrew/opt/python@3.14/bin/python3.14', '-c', 'import socket,sys\\ntry: socket.getaddrinfo(sys.argv[1],443,proto=socket.IPPROTO_TCP)\\nexcept socket.gaierror: pass', 'meshway-a7ad9aa35e724e94b353c27d2ffa5d1e.example.com']' timed out after 20 seconds",
+        "helper_diagnostic": {
+          "phase": "explicit-stop:native-dns",
+          "exit_code": null,
+          "last_cli_error": null
+        }
+      }
+    }
+  ],
+  "native_runtime": {
+    "date": "2026-10-14T15:55:58.796999+00:00",
+    "runner": "disposable GitHub-hosted macOS",
+    "version": "Meshway 0.1.0-alpha.2",
+    "binary_sha256": "85301e6a9cbe98d2b04884607fd3721618787febea34a2de3baf6c66d3682571",
+    "development_host_mutated": false,
+    "checks": {
+      "approved_remote_exit_socks_baseline": true,
+      "owned_daemon_stopped": true,
+      "final_default_routes_dns_proxy_restored": true,
+      "fresh_account_state_removed": true,
+      "temporary_vm_only_network_changes": true
+    },
+    "cycles": [],
+    "status": "FAIL",
+    "phase": "explicit-stop:native-dns",
+    "error": "Native resolver lookup exceeded20s; bounded virtual DNS route/packet diagnostics recorded.",
+    "partial_cycle": {
+      "mode": "explicit-stop",
+      "utun_active": true,
+      "ipv4_kernel_capture_route": true,
+      "ipv6_kernel_capture_route": true,
+      "virtual_dns_resolver_present": true,
+      "virtual_dns_routes": {
+        "ipv4": {
+          "interface": "utun4",
+          "owned_interface": true
+        },
+        "ipv6": {
+          "interface": "utun4",
+          "owned_interface": true
+        }
+      },
+      "native_dns_packet_counters_before": {
+        "bytes_sent": 1747,
+        "bytes_received": 3078
+      },
+      "native_dns_packet_counters_after_timeout": {
+        "bytes_sent": 9027,
+        "bytes_received": 3078
+      },
+      "controlled_virtual_dns_udp": {
+        "reply": false
+      },
+      "controlled_dns_packet_counters_after": {
+        "bytes_sent": 9409,
+        "bytes_received": 3078
+      }
+    },
+    "helper_diagnostic": {
+      "phase": "explicit-stop:native-dns",
+      "exit_code": null,
+      "last_cli_error": null
+    }
+  },
+  "temporary_resource_group_deleted": true,
+  "temporary_local_credentials_removed": true,
+  "finished": "2026-10-14T16:11:53.795179+00:00"
+}
