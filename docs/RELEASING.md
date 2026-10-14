@@ -10,9 +10,13 @@ Meshway has an Ed25519 publisher public key in `config/release-public.pem`, also
 
 ```sh
 ./scripts/release.sh
-python3 scripts/package-linux.py --binary dist/bin/meshway-linux-amd64 --version 0.1.0 --arch amd64
+python3 scripts/package-linux.py --binary dist/bin/meshway-linux-amd64 --version 0.1.0-alpha.1 --arch amd64
+python3 scripts/package-linux.py --binary dist/bin/meshway-linux-arm64 --version 0.1.0-alpha.1 --arch arm64
+./scripts/package-linux-lab.sh TRUSTED_ALPINE_IMAGE dist/bin/meshway-linux-amd64 0.1.0 x86_64 0.alpha.1
+./scripts/package-linux-lab.sh TRUSTED_ALPINE_IMAGE dist/bin/meshway-linux-arm64 0.1.0 aarch64 0.alpha.1
 npm pack --workspace @meshway/cli --pack-destination release
 # Add all final platform packages before signing. Sign again after any change.
+python3 scripts/native-manifest.py --version 0.1.0-alpha.1
 node scripts/release-tool.mjs sign release .tools/release/publisher-private.pem 0.1.0-alpha.1 1 2027-01-12T00:00:00Z
 node scripts/release-tool.mjs verify release config/release-public.pem
 ```
@@ -20,7 +24,7 @@ node scripts/release-tool.mjs verify release config/release-public.pem
 The npm installer ships the project key pin. A self-hosted fork can supply `--public-key /path/to/independently-verified.pem`. Reusing a cache rejects earlier sequences, conflicting metadata at one sequence, and changes to its publisher key. Cached execution checks the signature and binary on every launch and allows already installed metadata to expire for offline use. An update is an explicit install of a newer signed release; stop the owned daemon, install, and restart. No background updater changes a running VPN or routes.
 
 ```sh
-meshway install-core --release-base https://github.com/user-github-me/meshway/releases/download/v0.1.0-alpha.1/ --version 0.1.0-alpha.1
+meshway install-core
 ```
 
 The trusted npm package/source and locally protected public-key pin are part of the trust boundary. This does not defend against an attacker who can replace the entire local installation, pin, and rollback record. Publisher key rotation requires a separately verified new pin and fresh cache; no downloaded release can silently rotate trust.

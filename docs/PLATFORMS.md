@@ -1,45 +1,22 @@
 # Native applications
 
-Meshway uses the same Go networking core on every platform. Interfaces use the platform's native language and APIs: SwiftUI with Swift on macOS, WPF with C# on Windows, Kotlin and Android `VpnService` on Android, and Go CLI/server tools on Linux. Website and browser extension interfaces use TypeScript. These choices keep packet handling consistent while using the operating system's own application lifecycle.
+Go powers Meshway's shared networking core. Kotlin/Android VpnService, Swift/Apple Network Extension, C#/WPF and Wintun on Windows, and Go/TUN on Linux use native operating-system APIs. TypeScript powers the website, dashboard and browser extension. Each account device has a distinct networking identity; all platforms share the versioned encrypted peer protocols.
 
-## macOS
+## Apple
 
-Requires macOS 13+, Swift 6, and the Go daemon. Build the core, then the app:
+The simple SwiftUI daemon client builds with `scripts/build.sh` followed by `apps/macos/build.sh`. The native full-device VPN products build with `apps/apple/build.sh macos`, `apps/apple/build.sh ios`, or `apps/ios/build.sh`. Xcode and pinned gomobile produce a shared XCFramework and actual app/provider bundles. See [DESKTOP_VPN.md](DESKTOP_VPN.md) for entitlements, Keychain storage, state migration and provider lifecycle.
 
-```sh
-./scripts/build.sh
-./apps/macos/build.sh
-open dist/Meshway.app
-```
-
-The build script runs native client tests, builds the release Swift executable, and bundles the daemon for the current Mac architecture. Pass a daemon path as the first argument to override it. Swift source builds use `swift run --package-path apps/macos`; choose a daemon executable in settings when running outside the packaged app.
-
-The app edits bootstrap peers, upstream peer, loopback API/SOCKS settings, approved peers, and optional relay/exit roles. Its main screen lists advertised servers and uses approved single-click exit selection. Advanced network settings are collapsed initially. Account, device records, and local history can be refreshed, with optional explicit account peer synchronization. Native file dialogs save a private recovery key or import an existing one while the daemon is stopped. Importing over an existing local account requires an explicit replacement confirmation, which explains that local history and device records are cleared. JSON fields it does not edit, including named services and TCP forwards, are preserved. Config and identity state stay under `~/Library/Application Support/Meshway`; config permissions are owner-only. Settings apply on the next daemon start. Start controls an owned subprocess, live status uses bearer-authenticated loopback requests, and Stop shuts down only the process launched by this app. An already running daemon can be viewed without taking ownership. Quitting terminates the owned subprocess.
-
-The release is unsigned. Signing, hardened runtime configuration, notarization, updates, and a native Network Extension for device-wide IP VPN remain release gates. SOCKS5 and encrypted TCP tunnels work through the bundled core without a packet driver; the app does not modify system proxy settings or routes.
+The app starts its own daemon, shows actual server/account state and file-picker recovery actions, and switches to the provider for full-device traffic. Apple requires valid owner team profiles to install/run the packet extension. Unsigned Release macOS/iOS builds and a real Swift↔Go packet bridge test passed. Fourteen Swift tests include actual daemon configuration acceptance and protected-state migration. The development Mac's active VPN, routes, DNS and proxy were never changed by these checks.
 
 ## Windows
 
-Requires the .NET 8 SDK to build. The WPF app targets Windows and can be cross-compiled from another OS:
+Requires .NET8 and Go. Build with `apps/windows/build.ps1 -Runtime win-x64` or `win-arm64`; supply the matching pinned vendor Wintun library using `-Wintun`. `apps/windows/prepare-wintun.py` verifies the official archive hash. Packages include distinct `Meshway.exe`, `meshway-daemon.exe`, `meshway-vpn-helper.exe`, driver DLL and its upstream license.
 
-```sh
-dotnet build apps/windows/Meshway/Meshway.csproj -c Release
-```
-
-Build a self-contained package from PowerShell after building the Go binaries:
-
-```powershell
-./apps/windows/build.ps1 -Runtime win-x64
-# or: ./apps/windows/build.ps1 -Runtime win-arm64
-```
-
-The output directory contains `Meshway.exe` and `meshway-daemon.exe`. App preferences and daemon configuration use `%LOCALAPPDATA%\Meshway`, which inherits the user's directory permissions. The native app offers the same bootstrap/role/allowlist controls as macOS and preserves unedited JSON fields. It also includes server selection, account/device/history viewing, optional sync, private-server settings, and native recovery file dialogs while stopped. It calls the authenticated loopback API and uses `ProcessStartInfo.ArgumentList` to launch the daemon without a shell. Stop requests daemon shutdown; closing the window terminates its owned process tree. SOCKS and TCP tunneling are available through the daemon. A Windows packet driver, system routes/DNS integration, signing, an installer, and Windows runtime validation remain release gates.
+WPF manages private account/configuration data and defaults to device VPN on server Connect. The elevated helper owns routes, tunneled DNS and scoped firewall rules with rollback and a watchdog. DPAPI protects the random state-encryption key. Actual Windows GitHub runner initialization, loopback authentication and graceful daemon shutdown passed. Portable helper tests cover 5,000 random IPv4/IPv6 CIDR cases. The opt-in signed Wintun kernel lab separately verifies real packet I/O without changing default routes/DNS; full-device firewall and crash recovery require actual native evidence.
 
 ## Android
 
-The Kotlin app embeds the Go core using `gomobile`, rather than trying to run an executable from app storage. Its foreground service continues peer traffic after leaving the UI, exposes a Stop notification, and stores config/identity only in private app storage with backups disabled. Default relay and internet exit roles are off. It lists advertised servers with approved selection, displays local account/devices/history, and offers explicit account peer synchronization. Android's document picker saves/imports private recovery files while stopped; private transfer files are deleted afterward. Full JSON config can be edited under advanced settings before starting; the core validates it. The private server toggle enables an exit for enrolled devices sharing the same recovery key. Importing the full recovery key onto a server grants that server account enrollment authority; only use servers you control. Device revocation cannot invalidate a stolen master recovery key; see [ACCOUNTS.md](ACCOUNTS.md).
-
-Requirements: JDK 17, the included Gradle 8.9 wrapper, Go 1.26+, Android SDK platform 35 and build tools 35.0.0, Android NDK 27.2.12479018, and pinned `gomobile`/`gobind` tools installed automatically by the build script. SDK licenses must already be accepted.
+The Kotlin foreground VpnService embeds the shared core through gomobile. Its simple server Connect flow asks Android for VPN consent, installs both-family default capture and virtual DNS, and reports connected only after the encrypted packet exit handshake. Lost peer sessions retain capture and reconnect; explicit Disconnect releases it. A separate private-subnet mode remains under Advanced settings. Android Keystore protects the random key used to encrypt local account/identity/preferences. Recovery backups use the system document picker; app backup is disabled.
 
 ```sh
 export JAVA_HOME=/path/to/jdk17
@@ -49,16 +26,16 @@ export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/27.2.12479018"
 adb install -r dist/meshway-android-debug.apk
 ```
 
-The build includes arm64 and x86_64 native libraries for phones and emulators. The Android binding scopes `-checklinkname=0` to the mobile build because libp2p's `github.com/wlynxg/anet` dependency accesses Go's private IPv6 zone cache; upstream currently requires this workaround on Go 1.23+. Compatibility with future Go internals needs review. The debug APK is a development artifact. Release signing uses an owner's private signing key, which is deliberately excluded from source control. `gradle assembleRelease` produces an unsigned release APK until a signing configuration is supplied.
+Uses Gradle8.9, SDK/buildtools35, NDK27.2, arm64/x86_64 libraries and minSDK26. Go mobile linker compatibility uses the scoped upstream-required `-checklinkname=0`; future Go upgrades need validation. Owner signing credentials produce release APKs; the distributed development APK uses a debug key.
 
-Optional Android VPN mode creates a real TUN with Android's user consent and passes its descriptor to the Go core. It supports an explicitly entered private IPv4 address and private subnet route, an approved remote peer, and a matching 1280-byte peer MTU. The app excludes its own peer transport sockets from the VPN to avoid a routing loop. The initial client routes only the chosen private subnet. A remote peer needs its own VPN device, matching routes and peer permission; automatic internet exit NAT is not configured. Other device traffic uses its normal connection. No DNS interception, DNS leak protection, kill switch, IPv6 routes, full internet VPN, automatic network recovery, or real-phone verification is claimed. The notification says the local private interface is active only after descriptor attachment succeeds; it does not assert remote internet reachability.
+Actual Android35 arm64 emulator checks passed: install/start/background lifecycle, distinct-device account recovery picker flows, private kernel ICMP, and full internet VPN from a separate-UID probe: TCP, system DNS, TLS1.3 public HTTPS, lost-peer traffic blocking with TUN retained, restart recovery and explicit-disconnect normal traffic. [Evidence](../artifacts/android-ip-exit/result.json). Physical phones, battery policy, cellular handover, always-on/reboot behavior and another VPN's consent interactions need field runs. Phone inbound reachability is not assumed; peers may need relay/bootstrap transport.
 
-## Linux and server platforms
+## Linux, server and browser
 
-The Go CLI is the native Linux client and server. The daemon works on Linux, macOS, and Windows and can serve encrypted relays, explicitly enabled internet exits, and named private services. Linux packet VPN uses a privileged TUN; see [VPN.md](VPN.md) and the server installation documents. Containers cannot create device-wide host VPN routes by themselves. npm is an installation/launcher convenience around the native daemon.
+The Go daemon provides SOCKS5 TCP/UDP, named TCP service tunnels, relays, approved public exits and same-account personal servers. Linux TUN supports IPv4/IPv6 internet packets without NAT/route privileges on the exit: gVisor reoriginates authorized TCP/UDP sockets in userspace. The local client needs explicit TUN/routes/DNS setup or the Linux privileged helper. Server installation supports containers, systemd, Debian/RPM packages and npm launcher downloads. Containers cannot silently configure the development host VPN.
 
-## Validation and release gates
+The TypeScript Chrome/Firefox extension configures only a local browser SOCKS proxy. It requires consent and restores owned prior proxy settings. Real isolated Chromium tests cover activation and restoration; Firefox builds but native runtime needs field validation. A public HTTPS website cannot assume browser access to a loopback HTTP control API; the dashboard can be served locally.
 
-The development host is an arm64 Mac. Ten Swift tests, including actual Go daemon acceptance of the native private-server config, and the release `.app` build have passed; the app has been launched locally. WPF source compilation and self-contained win-x64 and win-arm64 publishes have passed on macOS; the Windows UI and process lifecycle require testing on Windows. Android arm64/x86_64 debug APK compilation has passed using a locally installed SDK. On an Android 35 arm64 emulator, installation, account creation, foreground operation while backgrounded, Stop, authenticated status, outbound encrypted peer dialing to a Mac gateway, approved server selection, and disconnect have passed. Android recovery export through the system document picker produced a valid-sized private recovery backup and removed its temporary app file. Explicitly confirmed SAF import of that backup preserved the account ID and device peer ID and successfully restarted the node. A real Android VpnService TUN was established with system user consent. The opt-in `TestAndroidKernelTUNEncryptedPing` passed: a Mac packet socket sent an ICMP request through an encrypted stream into the Android TUN; the Android kernel generated a valid echo reply over the return encrypted stream. Stop removed `tun0` and the foreground service. Revocation, different-account migration, real-phone behavior, and battery/background restrictions still require broader verification. Android interface enumeration on this emulator is restricted by SELinux, so its advertised addresses are loopback only; outbound peer dialing succeeds. Public inbound phone reachability is not assumed. Signing and public store/release publication have not been performed.
+## Verification
 
-Repeat the Android TUN lab on a disposable emulator with the native app stopped, `MESHWAY_ANDROID_TUN_LAB=1 MESHWAY_ANDROID_PEER_ID=<device-peer-id> go test -v ./internal/vpn -run TestAndroidKernelTUNEncryptedPing -count=1`. The test prints a temporary host identity and bootstrap address. Configure that address and approved peer in the Android app, enable its private VPN for `10.77.0.2/30` and route `10.77.0.0/30`, then start and accept Android VPN consent within 90 seconds. The host uses a socket pair and leaves host networking unchanged.
+See [STATUS.md](STATUS.md), [VPN.md](VPN.md), and [VALIDATION.md](VALIDATION.md) for exact evidence and limitations. Real public Azure direct/forced-relay HTTPS, packet loss, outage/restart and confirmed cloud cleanup passed. Signing and independently audited security are separate release requirements, with automation in [RELEASING.md](RELEASING.md). Never infer universal NAT reachability or actual OS provider operation from compilation.

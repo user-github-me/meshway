@@ -12,7 +12,8 @@ cp "$project_dir/deploy/meshway.spec" "$work/deploy/"
 cp "$project_dir/deploy/systemd/meshway.service" "$work/deploy/systemd/"
 cp "$project_dir/LICENSE" "$work/"
 cp "$2" "$work/meshway"
+case "$4" in x86_64) platform=linux/amd64;; aarch64) platform=linux/arm64;; *) printf '%s\n' 'Unsupported RPM architecture.' >&2; exit 1;; esac
 # Signed Alpine packages supply the GNU tools rpmbuild needs; no host install.
-docker run --rm --user 0:0 -v "$work:/source" --entrypoint /bin/sh "$1" \
+docker run --rm --platform "$platform" --user 0:0 -v "$work:/source" --entrypoint /bin/sh "$1" \
   -c 'set -eu; apk add --no-cache rpm file binutils findutils grep coreutils >/dev/null; sh /source/scripts/package-rpm.sh /source/meshway "$1" "$2" "$3"; rpm -qpi /source/release/*.rpm' -- "$3" "$4" "${5:-1}"
 find "$work/release" -name '*.rpm' -exec cp {} "$project_dir/release/" \;

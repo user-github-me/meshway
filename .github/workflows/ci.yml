@@ -42,6 +42,26 @@ jobs:
           go-version: '1.27.2'
       - run: ./scripts/build.sh
       - run: ./apps/macos/build.sh
+  apple-tunnel:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.2'
+      - run: ./apps/apple/build.sh macos
+      - run: MESHWAY_REUSE_APPLE_CORE=1 ./apps/apple/build.sh ios
+  linux-vpn:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.2'
+      - name: Build disposable signed-distribution lab image
+        run: docker build -f deploy/Dockerfile.lab -t meshway-network-lab .
+      - name: Test real kernel VPN setup, crash protection and rollback in containers
+        run: MESHWAY_LAB_IMAGE=meshway-network-lab ./scripts/linux-vpn-setup-lab.sh
   browser:
     runs-on: ubuntu-latest
     steps:

@@ -15,8 +15,8 @@ import (
 	"strings"
 
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/user-github-me/meshway/internal/state"
 	ma "github.com/multiformats/go-multiaddr"
+	"github.com/user-github-me/meshway/internal/state"
 )
 
 type Forward struct {

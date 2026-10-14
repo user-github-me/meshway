@@ -45,7 +45,7 @@ def main():
     if not args.binary.read_bytes().startswith(b"\x7fELF"):
         parser.error("Expected a Linux ELF binary")
     root = Path(__file__).resolve().parents[1]
-    control = f"Package: meshway\nVersion: {args.version}\nSection: net\nPriority: optional\nArchitecture: {args.arch}\nMaintainer: Meshway contributors\nDepends: adduser, systemd\nDescription: Encrypted peer VPN, SOCKS and tunnel daemon\n Internet exits require explicit operator consent and peer authorization.\n"
+    control = f"Package: meshway\nVersion: {args.version}\nSection: net\nPriority: optional\nArchitecture: {args.arch}\nMaintainer: Meshway contributors\nDepends: adduser, systemd, iproute2, nftables\nRecommends: systemd-resolved\nDescription: Encrypted peer VPN, SOCKS and tunnel daemon\n Internet exits require explicit operator consent and peer authorization.\n"
     postinst = b'''#!/bin/sh
 set -eu
 if ! getent passwd meshway >/dev/null; then

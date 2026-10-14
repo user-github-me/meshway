@@ -30,8 +30,11 @@ func main() {
 	}
 }
 func run(args []string) error {
+	if len(args) > 0 && args[0] == "vpn" {
+		return vpnCommand(args[1:])
+	}
 	if len(args) > 0 && (args[0] == "--help" || args[0] == "-h" || args[0] == "help") {
-		fmt.Println("Meshway: encrypted peer VPN, SOCKS and tunnels\n\nCommands: init, setup-server --personal, identity, daemon, status, version\nAccount: create, export --output FILE, import --input FILE [--force], rotate --output NEW_FILE, status, devices, history, sync --peer ID, revoke --peer ID\nAll commands accept --config PATH. Default: ~/.meshway/config.json\nStart: meshway init && meshway daemon\nDocumentation: https://github.com/user-github-me/meshway")
+		fmt.Println("Meshway: encrypted peer VPN, SOCKS and tunnels\n\nCommands: init, setup-server --personal, identity, daemon, status, version\nAccount: create, export --output FILE, import --input FILE [--force], rotate --output NEW_FILE, status, devices, history, sync --peer ID, revoke --peer ID\nLinux device VPN: sudo meshway vpn start|stop|status --config ABSOLUTE_PATH [--dns-mode resolved|file]\nAll commands accept --config PATH. Default: ~/.meshway/config.json\nStart: meshway init && meshway daemon\nDocumentation: https://github.com/user-github-me/meshway")
 		return nil
 	}
 	if len(args) == 0 {

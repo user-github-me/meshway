@@ -5,7 +5,11 @@ cd "$project_dir"
 ./scripts/build.sh --all
 mkdir -p release
 # New metadata must be signed after all packaging steps finish.
-rm -f release/RELEASE.json release/RELEASE.json.sig
+python3 - <<'PY'
+from pathlib import Path
+for name in ('RELEASE.json','RELEASE.json.sig'):
+    (Path('release')/name).unlink(missing_ok=True)
+PY
 python3 - <<'PY'
 from pathlib import Path
 import hashlib, shutil, tarfile, zipfile
@@ -70,6 +74,8 @@ import hashlib
 checksums=[f'{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}' for path in sorted(release.iterdir()) if path.is_file() and path.name!='SHA256SUMS']
 (release/'SHA256SUMS').write_text('\n'.join(checksums)+'\n')
 PY
+release_version=${MESHWAY_RELEASE_VERSION:-$(node -p "JSON.parse(require('fs').readFileSync('package.json','utf8')).version")}
+python3 scripts/native-manifest.py --version "$release_version"
 if [ -n "${MESHWAY_RELEASE_KEY_FILE:-}" ]; then
   : "${MESHWAY_RELEASE_VERSION:?Set release version}"
   : "${MESHWAY_RELEASE_SEQUENCE:?Set monotonically increasing release sequence}"

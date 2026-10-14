@@ -7,7 +7,8 @@ Source0:        meshway
 Source1:        meshway.service
 Source2:        LICENSE
 Requires(pre):  shadow-utils
-Requires:       systemd
+Requires:       systemd, iproute, nftables
+Recommends:     systemd-resolved
 BuildArch:      %{meshway_arch}
 
 %description
