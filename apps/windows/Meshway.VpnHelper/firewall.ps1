@@ -62,6 +62,8 @@ function Add-MeshwayFirewall {
     $ndp += @(Get-NetRoute -InterfaceIndex $Adapter.ifIndex -AddressFamily IPv6 -ErrorAction Stop | Where-Object { $_.NextHop -eq '::' -and $_.DestinationPrefix -notin @('::/0','::/1','8000::/1') } | ForEach-Object { $_.DestinationPrefix })
     $outsideLink = [Meshway.VPN.FirewallAddressRanges]::Complement([string[]]$ndp,$true)
     $otherTypes = @(0..255 | Where-Object { $_ -notin @(133,134,135,136) } | ForEach-Object { "$_" })
-    Block-Remote -Protocol ICMPv6 -Addresses @('::/0') -IcmpTypes $otherTypes
+    # Windows PowerShell 5.1 NetSecurity rejects the all-IPv6 ::/0 prefix
+    # on an ICMPv6 rule; protocol 58 already supplies its address family.
+    Block-Remote -Protocol ICMPv6 -Addresses @('Any') -IcmpTypes $otherTypes
     Block-Remote -Protocol ICMPv6 -Addresses $outsideLink -IcmpTypes @('133','134','135','136')
 }

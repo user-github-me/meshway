@@ -1,6 +1,6 @@
 # Release process
 
-The initial source destination authorized by the owner is `github.com/user-github-me/meshway`. This does not establish ownership of an npm scope, browser store listing, Apple team, Windows certificate, domain, or permanent hosted relay. Those destinations must be configured explicitly.
+The owner-authorized source/release destination is `github.com/user-github-me/meshway`, with GitHub Pages and `ghcr.io/user-github-me/meshway` distribution. The separately authorized persistent Azure encrypted relay is documented in `docs/PUBLIC_NETWORK.md`. npm namespace ownership, browser/app-store listings, Apple provisioning, Windows certificates and a custom domain require their respective owner credentials/configuration.
 
 ## Publisher signatures and updates
 
@@ -30,6 +30,10 @@ meshway install-core
 The trusted npm package/source and locally protected public-key pin are part of the trust boundary. This does not defend against an attacker who can replace the entire local installation, pin, and rollback record. Publisher key rotation requires a separately verified new pin and fresh cache; no downloaded release can silently rotate trust.
 
 ## Platform artifacts
+
+The initial release is `v0.1.0-alpha.1`, core version `0.1.0-alpha.1`, CLI package version `0.1.0`. It has 32 signed payload files plus `RELEASE.json` and `RELEASE.json.sig`: six raw cores, six core archives, two complete Windows app bundles, universal macOS and ARM64 fallback bundles, unsigned iOS ZIP/IPA, Android development APK, two browser extension ZIPs, npm CLI tarball, two Debian packages, two RPMs, two portable container archives, native hash manifest, checksums, license and third-party notices. Sequence 1 expires for new installations on 2027-01-12. Later content changes require a new release sequence and version rather than replacing sequence-1 metadata.
+
+`artifacts/release-artifact-validation.json` records archive-content checks against current raw cores/native binaries: all 18 native executable hashes, complete Windows helper/driver bundles, universal macOS GUI/provider/daemon and the standard iOS Payload layout. Debian packages were checked to contain the exact current raw Linux cores. Packaging checks do not replace the device/runtime evidence in `docs/VALIDATION.md`.
 
 `THIRD_PARTY_NOTICES.txt` preserves the pinned upstream Go, web, .NET desktop runtime and Wintun license texts. `scripts/third-party-notices.py` regenerates notices from the public dependency caches without reading credentials. Core/app/extension archives, Linux packages and container images include notices; the npm installer downloads signed license companions alongside its core. The main macOS app and embedded daemon are universal Intel/Apple Silicon binaries; the simple daemon-client fallback is explicitly named `Meshway-macos-arm64-daemon-client.zip`.
 

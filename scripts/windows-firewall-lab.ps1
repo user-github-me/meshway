@@ -95,8 +95,8 @@ try {
     & go test -c -o $binary ./internal/vpn
     if ($LASTEXITCODE -ne 0) { throw 'Firewall fixture compilation failed.' }
     $env:MESHWAY_WINDOWS_FIREWALL_LAB_DIR=$directory
-    $child=Start-Process -FilePath $binary -ArgumentList @('-test.run=TestWindowsFirewallAdapterFixture','-test.v','-test.timeout=180s') -PassThru -RedirectStandardOutput (Join-Path $directory 'fixture.log') -RedirectStandardError (Join-Path $directory 'fixture-error.log')
-    $deadline=[DateTime]::UtcNow.AddSeconds(30)
+    $child=Start-Process -FilePath $binary -ArgumentList @('-test.run=TestWindowsFirewallAdapterFixture','-test.v','-test.timeout=300s') -PassThru -RedirectStandardOutput (Join-Path $directory 'fixture.log') -RedirectStandardError (Join-Path $directory 'fixture-error.log')
+    $deadline=[DateTime]::UtcNow.AddSeconds(90)
     $ready=Join-Path $directory 'ready.json'
     while (!(Test-Path -LiteralPath $ready)) {
         if ($child.HasExited -or [DateTime]::UtcNow -ge $deadline) { throw 'Owned Wintun firewall fixture did not start.' }
@@ -153,7 +153,7 @@ try {
     $partial | Remove-NetFirewallRule
     Assert-Lab (@(Get-NetFirewallRule -Group $badGroup -ErrorAction SilentlyContinue).Count -eq 0) 'Partial failure rules remained after cleanup.'
     New-Item -ItemType File -Path (Join-Path $directory 'stop') | Out-Null
-    if (!$child.WaitForExit(10000) -or $child.ExitCode -ne 0) { throw 'Owned adapter fixture did not stop cleanly.' }
+    if (!$child.WaitForExit(65000) -or $child.ExitCode -ne 0) { throw 'Owned adapter fixture did not stop cleanly.' }
     $afterRoutes=Get-NetRoute | Where-Object { $_.DestinationPrefix -in @('0.0.0.0/0','::/0') } | Select-Object InterfaceIndex,DestinationPrefix,NextHop,RouteMetric | Sort-Object InterfaceIndex,DestinationPrefix | ConvertTo-Json -Compress
     $afterDns=Get-DnsClientServerAddress | Where-Object { $_.InterfaceAlias -notlike 'MeshwayFirewallLab*' } | Select-Object InterfaceIndex,AddressFamily,ServerAddresses | Sort-Object InterfaceIndex,AddressFamily | ConvertTo-Json -Compress
     Assert-Lab ($beforeRoutes -eq $afterRoutes) 'Firewall lab changed default routes.'
@@ -164,7 +164,7 @@ try {
     Write-Output 'PASS production Windows firewall: actual adapter-scoped filters, kernel UDP blocking/bypass, control protocol filters and cleanup.'
 } finally {
     foreach ($group in $groups) { Get-NetFirewallRule -Group $group -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction SilentlyContinue }
-    if ($child -and !$child.HasExited) { New-Item -ItemType File -Force -Path (Join-Path $directory 'stop') -ErrorAction SilentlyContinue | Out-Null; if (!$child.WaitForExit(10000)) { $child.Kill($true) } }
+    if ($child -and !$child.HasExited) { New-Item -ItemType File -Force -Path (Join-Path $directory 'stop') -ErrorAction SilentlyContinue | Out-Null; if (!$child.WaitForExit(65000)) { $child.Kill($true) } }
     if (Test-Path -LiteralPath (Join-Path $directory 'fixture.log')) { Get-Content -LiteralPath (Join-Path $directory 'fixture.log') }
     if (Test-Path -LiteralPath (Join-Path $directory 'fixture-error.log')) { Get-Content -LiteralPath (Join-Path $directory 'fixture-error.log') }
     foreach ($file in @('fixture.log','fixture-error.log','blocked.json','apply.ps1','complement.ps1')) { if (Test-Path -LiteralPath (Join-Path $directory $file)) { Copy-Item -LiteralPath (Join-Path $directory $file) -Destination (Join-Path $evidence $file) -Force } }

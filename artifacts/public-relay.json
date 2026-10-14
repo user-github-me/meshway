@@ -1,6 +1,6 @@
 {
   "status": "PASS",
-  "time": "2026-10-14T01:56:53.458826+00:00",
+  "time": "2026-10-14T03:18:31.820684+00:00",
   "resource_group": "meshway-public-relay-20261014-012624",
   "region": "eastasia",
   "size": "Standard_B1s",
@@ -15,7 +15,7 @@
     "exit": false
   },
   "persistent": true,
-  "binary_sha256": "ba8a51df59111998e584a2fa1a2fb283b0eace9da15565146e40426f3c9d3fc7",
+  "binary_sha256": "8804cd116a26672957ff2336b44b6827f6fcfd2852aafe7ad5a507ff40cec818",
   "host_network_modified": false,
   "tests": {
     "encrypted_peer_connection": "PASS",
