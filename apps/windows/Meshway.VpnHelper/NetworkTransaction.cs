@@ -92,6 +92,15 @@ Set-NetIPInterface -InterfaceIndex $adapter.ifIndex -AddressFamily IPv4 -NlMtuBy
 Set-NetIPInterface -InterfaceIndex $adapter.ifIndex -AddressFamily IPv6 -NlMtuBytes 1280 -InterfaceMetric 1 -Dhcp Disabled
 New-NetIPAddress -InterfaceIndex $adapter.ifIndex -IPAddress '10.77.0.2' -PrefixLength 32 -PolicyStore ActiveStore | Out-Null
 New-NetIPAddress -InterfaceIndex $adapter.ifIndex -IPAddress 'fd77::2' -PrefixLength 128 -PolicyStore ActiveStore | Out-Null
+# Windows may return from address creation before duplicate address detection
+# finishes. Activate DNS and routes only once both source addresses are usable.
+$addressDeadline = [DateTime]::UtcNow.AddSeconds(15)
+do {
+    $preferred = @(Get-NetIPAddress -InterfaceIndex $adapter.ifIndex -ErrorAction Stop | Where-Object { $_.IPAddress -in @('10.77.0.2','fd77::2') -and $_.AddressState -eq 'Preferred' })
+    if ($preferred.Count -eq 2) { break }
+    if ([DateTime]::UtcNow -ge $addressDeadline) { throw 'Tunnel addresses did not become ready. VPN network setup will be rolled back.' }
+    Start-Sleep -Milliseconds 200
+} while ($true)
 Set-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex -ServerAddresses @('10.77.0.1','fd77::1')
 # Two /1 routes take precedence without editing any pre-existing default route.
 foreach ($prefix in @('0.0.0.0/1','128.0.0.0/1','::/1','8000::/1')) {

@@ -31,7 +31,9 @@ import (
 )
 
 func windowsLabPowerShell(script string) ([]byte, error) {
-	return exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "$ErrorActionPreference='Stop'; "+script).CombinedOutput()
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	return exec.CommandContext(ctx, "powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "$ErrorActionPreference='Stop'; "+script).CombinedOutput()
 }
 
 // Opt-in test for a DISPOSABLE administrator Windows runner with the pinned,
@@ -61,7 +63,8 @@ func TestWindowsWintunKernelIPv4IPv6EncryptedTCP(t *testing.T) {
 	// detection completes. Wait for actual kernel readiness, rather than a
 	// fixed delay that passes on IPv6 while leaving IPv4 unbindable.
 	ready := false
-	for attempt := 0; attempt < 100; attempt++ {
+	readyDeadline := time.Now().Add(15 * time.Second)
+	for time.Now().Before(readyDeadline) {
 		query := fmt.Sprintf("$a=@(Get-NetIPAddress -InterfaceAlias '%s' | Where-Object { ($_.IPAddress -eq '10.73.0.11' -or $_.IPAddress -eq 'fd73::11') -and $_.AddressState -eq 'Preferred' }); if ($a.Count -eq 2) { Write-Output 'ready' }", name)
 		out, queryErr := windowsLabPowerShell(query)
 		if queryErr == nil && strings.TrimSpace(string(out)) == "ready" {
