@@ -17,6 +17,16 @@ final class PacketTunnelPlanTests: XCTestCase {
         XCTAssertThrowsError(try PacketTunnelPlan(peerID: "wrong", invitation: plan.invitation))
         XCTAssertThrowsError(try PacketTunnelPlan(peerID: "exit", invitation: ""))
     }
+    func testLegacyMigrationRejectsEncryptedStore() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try Data("meshway-vault-v1\0encrypted".utf8).write(to: folder.appendingPathComponent("identity.key"))
+        let target = folder.appendingPathComponent("copied")
+        XCTAssertThrowsError(try StateMigration.copyStoppedLegacyState(from: folder, to: target))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: target.path))
+    }
+
     func testMalformedPacketsNeverReachPacketFlow() {
         XCTAssertNil(PacketTunnelPlan.packetFamily(Data()))
         XCTAssertNil(PacketTunnelPlan.packetFamily(Data([0x45])))

@@ -56,6 +56,11 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run test:browser --workspace @meshway/web
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: browser-failure-evidence
+          path: apps/web/test-results
   windows:
     runs-on: windows-latest
     steps:
@@ -68,12 +73,16 @@ jobs:
           go-version: '1.27.2'
       - run: dotnet build apps/windows/Meshway/Meshway.csproj -c Release
       - run: go build -o dist/meshway-windows-amd64.exe ./cmd/meshway
-      - run: ./apps/windows/build.ps1 -Runtime win-x64 -Daemon dist/meshway-windows-amd64.exe
+      - run: python apps/windows/prepare-wintun.py --arch amd64 --output dist/wintun/amd64/wintun.dll
+      - run: ./apps/windows/build.ps1 -Runtime win-x64 -Daemon dist/meshway-windows-amd64.exe -Wintun dist/wintun/amd64/wintun.dll
       - run: ./scripts/validate-windows.ps1 -Daemon dist/Meshway-win-x64/meshway-daemon.exe
+      - run: ./scripts/windows-tun-lab.ps1 -Package dist/Meshway-win-x64
       - uses: actions/upload-artifact@v4
         with:
           name: windows-runtime-evidence
-          path: artifacts/windows-validation.json
+          path: |
+            artifacts/windows-validation.json
+            artifacts/windows-wintun-validation.json
   android:
     runs-on: ubuntu-latest
     steps:
@@ -86,5 +95,7 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@v3
+        with:
+          packages: ''
       - run: sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;27.2.12479018"
       - run: ./apps/android/build.sh

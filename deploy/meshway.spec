@@ -1,6 +1,6 @@
 Name:           meshway
 Version:        %{meshway_version}
-Release:        1%{?dist}
+Release:        %{meshway_release}%{?dist}
 Summary:        Encrypted peer VPN, SOCKS and tunnel daemon
 License:        Apache-2.0
 Source0:        meshway

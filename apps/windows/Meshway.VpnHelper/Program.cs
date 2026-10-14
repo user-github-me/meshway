@@ -29,6 +29,7 @@ var configPath = Path.GetFullPath(request["config"]!.GetValue<string>());
 var peer = request["peer_id"]!.GetValue<string>();
 var invitation = request["address"]!.GetValue<string>();
 var parentID = request["parent_pid"]!.GetValue<int>();
+var parentStart = request["parent_start"]!.GetValue<long>();
 var statusPath = requestPath + ".status";
 var stopPath = requestPath + ".stop";
 var journal = Path.Combine(Path.GetDirectoryName(requestPath)!, "vpn-network-journal.json");
@@ -73,7 +74,7 @@ try
         if (daemon.HasExited) {
             await File.WriteAllTextAsync(statusPath, JsonSerializer.Serialize(new { active = false, message = "VPN core stopped. Internet remains blocked until you disconnect." }));
         }
-        try { using var parent = Process.GetProcessById(parentID); if (parent.HasExited) break; }
+        try { using var parent = Process.GetProcessById(parentID); if (parent.HasExited || parent.StartTime.ToUniversalTime().Ticks != parentStart) break; }
         catch (ArgumentException) { break; }
         await Task.Delay(500);
     }

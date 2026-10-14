@@ -19,7 +19,8 @@ public sealed class DeviceVPNController
         var executable = Path.Combine(AppContext.BaseDirectory, "meshway-vpn-helper.exe");
         if (!File.Exists(executable) || !File.Exists(Path.Combine(AppContext.BaseDirectory, "meshway-daemon.exe")) || !File.Exists(Path.Combine(AppContext.BaseDirectory, "wintun.dll")))
             throw new FileNotFoundException("Install the complete Windows VPN package with its helper, daemon, and signed Wintun driver library.");
-        await File.WriteAllTextAsync(requestPath, JsonSerializer.Serialize(new { config = configPath, peer_id = peerID, address, parent_pid = Environment.ProcessId }));
+        using var parent = Process.GetCurrentProcess();
+        await File.WriteAllTextAsync(requestPath, JsonSerializer.Serialize(new { config = configPath, peer_id = peerID, address, parent_pid = Environment.ProcessId, parent_start = parent.StartTime.ToUniversalTime().Ticks }));
         // UAC is the operating system's consent for network changes. The
         // helper receives a private file path, never secrets on its command line.
         var start = new ProcessStartInfo(executable) { UseShellExecute = true, Verb = "runas", WorkingDirectory = AppContext.BaseDirectory };
@@ -30,9 +31,14 @@ public sealed class DeviceVPNController
         {
             if (File.Exists(statusPath))
             {
-                using var status = JsonDocument.Parse(await File.ReadAllTextAsync(statusPath));
+                JsonDocument status;
+                try { status = JsonDocument.Parse(await File.ReadAllTextAsync(statusPath)); }
+                catch (JsonException) { await Task.Delay(100); continue; }
+                using var statusDocument = status;
                 if (status.RootElement.GetProperty("active").GetBoolean()) return;
-                throw new IOException(status.RootElement.GetProperty("message").GetString());
+                var message = status.RootElement.GetProperty("message").GetString();
+                await Stop();
+                throw new IOException(message);
             }
             if (helper.HasExited) throw new IOException("VPN helper stopped before connecting. Check administrator consent and the server's VPN exit role.");
             await Task.Delay(250);

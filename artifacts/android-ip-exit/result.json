@@ -1,0 +1,65 @@
+{
+  "platform": "Android35 arm64 emulator",
+  "real_kernel_tun": true,
+  "internet_opt_in": true,
+  "gateway_bytes_sent": 8254,
+  "gateway_bytes_received": 4389,
+  "results": [
+    {
+      "kind": "tcp",
+      "passed": true,
+      "expected_success": true,
+      "result": {
+        "response_bytes": 128,
+        "success": true
+      }
+    },
+    {
+      "kind": "dns",
+      "passed": true,
+      "expected_success": true,
+      "result": {
+        "addresses": 1,
+        "success": true
+      }
+    },
+    {
+      "kind": "tls",
+      "passed": true,
+      "expected_success": true,
+      "result": {
+        "tls": "TLSv1.3",
+        "response_bytes": 128,
+        "success": true
+      }
+    },
+    {
+      "kind": "tcp",
+      "passed": true,
+      "expected_success": false,
+      "result": {
+        "success": false,
+        "error": "SocketTimeoutException: failed to connect to /10.194.57.107 (port 55549) from /10.77.0.2 (port 58382) after 5000ms"
+      }
+    },
+    {
+      "kind": "tcp",
+      "passed": true,
+      "expected_success": true,
+      "result": {
+        "response_bytes": 128,
+        "success": true
+      }
+    },
+    {
+      "kind": "tcp",
+      "passed": true,
+      "expected_success": true,
+      "result": {
+        "response_bytes": 128,
+        "success": true
+      }
+    }
+  ],
+  "host_network_settings_changed": false
+}

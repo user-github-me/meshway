@@ -58,16 +58,30 @@ final class IOSModel: ObservableObject {
         } catch { message = error.localizedDescription }
     }
 
+    private func coreOperation<T>(_ operation: @escaping () throws -> T) async throws -> T {
+        try await withCheckedThrowingContinuation { continuation in
+            work.async { continuation.resume(with: Result { try operation() }) }
+        }
+    }
+
     func refresh() async {
         guard let node else { return }
         do {
-            var error: NSError?
-            let text = node.servers(&error)
-            if let error { throw error }
-            let data = try JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any]
+            let records = try await coreOperation { () -> (String, String) in
+                var error: NSError?
+                let catalog = node.servers(&error)
+                if let error { throw error }
+                let root = node.accountStatus(&error)
+                if let error { throw error }
+                let devices = node.devices(&error)
+                if let error { throw error }
+                let history = node.history(&error)
+                if let error { throw error }
+                return (catalog, root + "\n\nDevices\n" + devices + "\n\nLocal history\n" + history)
+            }
+            let data = try JSONSerialization.jsonObject(with: Data(records.0.utf8)) as? [String: Any]
             servers = data?["servers"] as? [[String: Any]] ?? []
-            account = node.accountStatus(&error)
-            if let error { throw error }
+            account = records.1
             message = servers.isEmpty ? "No servers yet. Paste an invitation to add one." : "Choose a server to protect this device."
         } catch { message = error.localizedDescription }
     }
@@ -76,7 +90,8 @@ final class IOSModel: ObservableObject {
         guard let node else { await start(); return }
         busy = true; defer { busy = false }
         do {
-            try node.connect(invitation.trimmingCharacters(in: .whitespacesAndNewlines))
+            let address = invitation.trimmingCharacters(in: .whitespacesAndNewlines)
+            try await coreOperation { try node.connect(address) }
             var object = try JSONSerialization.jsonObject(with: Data(contentsOf: configURL)) as! [String: Any]
             var bootstraps = object["bootstrap_peers"] as? [String] ?? []
             if !bootstraps.contains(invitation) { bootstraps.append(invitation) }
@@ -90,7 +105,7 @@ final class IOSModel: ObservableObject {
         guard let peer = server["peer_id"] as? String, let address = server["address"] as? String else { return }
         busy = true; defer { busy = false }
         do {
-            try node?.stop(); node = nil
+            if let previous = node { try await coreOperation { try previous.stop() } }; node = nil
             try await vpn.connect(config: Data(contentsOf: configURL), peerID: peer, invitation: address)
             message = "Connecting encrypted device VPN…"
         } catch { message = error.localizedDescription; await start() }

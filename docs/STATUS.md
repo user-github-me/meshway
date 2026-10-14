@@ -1,6 +1,6 @@
 # Verified status
 
-Meshway 0.1.0-alpha.1 is an experimental open-source implementation. Source destination: https://github.com/user-github-me/meshway. Website destination: https://user-github-me.github.io/meshway/. Verification performed on 2026-10-14; publication/CI results are recorded below when available. The temporary validation servers are not a permanent public volunteer network.
+Meshway 0.1.0-alpha.1 is an experimental open-source implementation. Source published: https://github.com/user-github-me/meshway. Website live and actual browser-verified: https://user-github-me.github.io/meshway/. Verification performed on 2026-10-14. GitHub Pages deployment and core/web/macOS/Windows CI passed; browser/Android CI setup fixes are being verified. The temporary validation servers are not a permanent public volunteer network.
 
 ## Implemented and exercised
 
@@ -12,15 +12,15 @@ Meshway 0.1.0-alpha.1 is an experimental open-source implementation. Source dest
 | Accounts | Signed devices/history; authenticated encrypted optional sync; Keychain/Keystore/DPAPI storage integration; AES-GCM state migration/tampering tests; recovery import/rotation with restart journal; independent signed revocation propagation and signed history deletion |
 | Server catalog | Live list/map, owner-supplied country, authorized click/select; persistent invitations and selection; optional bounded bootstrap directory discovery with authenticated owner requery and private-server exclusion |
 | Linux internet VPN | Real kernel TUN → encrypted peer → gVisor userspace internet exit, IPv4/IPv6 TCP/UDP, kernel DNS, public TLS HTTPS; retained TUN blocks new TCP/DNS after stream loss |
-| Android | Kotlin VpnService full IPv4/IPv6 capture and tunneled DNS; debug APK builds; real Android35 emulator private TUN/ICMP and account/file-picker tests; full internet emulator verification recorded separately |
-| Apple | Swift macOS and iOS apps plus real Network Extension provider; unsigned debug/release Xcode builds; real Swift↔Go packet bridge UDP DNS; 13 Swift tests including real daemon contract |
-| Windows | WPF app, UAC helper, Wintun IPv4/IPv6 routes, NRPT DNS, owned firewall/journal rollback, DPAPI; x64/arm64 builds; 5,000 randomized helper CIDR test cases; Windows runtime requires its CI/device evidence |
+| Android | Kotlin VpnService full IPv4/IPv6 capture and tunneled DNS; debug APK builds; real Android35 emulator private TUN/ICMP and account/file-picker tests; actual separate-UID internet VPN TCP, DNS, TLS1.3, lost-peer blocking, restart recovery and explicit-disconnect restoration passed ([evidence](../artifacts/android-ip-exit/result.json)) |
+| Apple | Swift macOS and iOS apps plus real Network Extension provider; unsigned debug/release Xcode builds; real Swift↔Go packet bridge UDP DNS; 14 Swift tests including real daemon contract and state migration |
+| Windows | WPF app, UAC helper, Wintun IPv4/IPv6 routes, NRPT DNS, owned firewall/journal rollback, DPAPI; x64/arm64 builds; 5,000 randomized helper CIDR test cases; actual Windows GitHub runner daemon authentication/shutdown passed; signed Wintun kernel test runs separately |
 | Browser/web | Responsive real website/dashboard, live account/server list/map/personal selection; 5 actual Chromium integration tests; browser proxy enable/restoration in isolated profile |
 | External internet | Owner Mac → Azure exit → example.com TLS; forced circuit through separate Azure relay → same HTTPS; actual circuit-limited transport observed |
 | Restrictive NAT/recovery | Real separate Linux NAT namespaces reject direct inbound, relayed HTTPS, 80ms±20ms delay and 3% loss, outage detection and restart HTTPS; corresponding public Azure relay/loss/restart checks also pass |
 | Distribution | Six platform binaries; Debian/RPM packages; actual container source build with verified SDK/dependency checksums; full native bundle scripts; Ed25519 signed release metadata with independently bundled pin, rollback/equivocation/expiry/cache validation |
 
-Go vet and race tests pass across all packages. JavaScript has 20 passing unit tests and five browser integration tests. Swift has 13 passing tests. The native Windows helper has portable routing tests. Earlier packet parser fuzzing exercised 43,535 inputs. Security checks are development validation, not an independent audit.
+Go vet and race tests pass across all packages. JavaScript has 20 passing unit tests and five browser integration tests. Swift has 14 passing tests. The native Windows helper has portable routing tests. Earlier packet parser fuzzing exercised 43,535 inputs. Security checks are development validation, not an independent audit.
 
 External test details: [VALIDATION.md](VALIDATION.md), [cloud evidence](../artifacts/cloud-validation.json), [NAT evidence](../artifacts/nat-validation.json). Azure evidence includes binary SHA-256 and confirmed deletion of every temporary resource group. Host default routes, DNS, active VPN and system proxy were preserved.
 

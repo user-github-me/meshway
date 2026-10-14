@@ -76,13 +76,14 @@ final class AppModel: ObservableObject {
         if let shared = AppleVPNController.sharedContainer {
             let previous = URL(fileURLWithPath: configuration.stateDirectory)
             let destination = shared.appendingPathComponent("node")
+            configuration.stateDirectory = destination.path
             do {
                 if FileManager.default.fileExists(atPath: previous.path), !FileManager.default.fileExists(atPath: destination.path) {
-                    try FileManager.default.copyItem(at: previous, to: destination)
+                    try StateMigration.copyStoppedLegacyState(from: previous, to: destination)
                 }
                 configuration.stateDirectory = destination.path
                 try configuration.save(to: configURL)
-            } catch { self.error = "Could not migrate private state into the VPN app group: \(error.localizedDescription)" }
+            } catch { self.error = "Could not migrate private state into the VPN app group: \(error.localizedDescription)"; try? configuration.save(to: configURL) }
         }
         bootstrapText = configuration.bootstrapPeers.joined(separator: "\n")
         allowedPeersText = configuration.allowedPeers.joined(separator: "\n")

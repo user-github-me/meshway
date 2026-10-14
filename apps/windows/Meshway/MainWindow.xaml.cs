@@ -127,6 +127,8 @@ public partial class MainWindow : Window
             DockPanel.SetDock(connect, Dock.Right);
             connect.Click += async (_, _) =>
             {
+                if (busy) return;
+                busy = true; UpdateButtons();
                 try {
                     if (DeviceVPNMode.IsChecked == true) {
                         var foreground = ownedProcess ?? throw new InvalidOperationException("Start Meshway from this app before connecting a device VPN.");
@@ -140,6 +142,7 @@ public partial class MainWindow : Window
                     }
                     await Request("v1/select", JsonSerializer.Serialize(new { peer_id = id, address })); MessageText.Text = "Selected " + label + ". Applications can use the Meshway SOCKS connection."; await Refresh(true); }
                 catch (Exception error) { MessageText.Text = error.Message; }
+                finally { busy = false; UpdateButtons(); }
             };
             row.Children.Add(connect);
             row.Children.Add(new TextBlock { Text = label + (country.Length == 0 ? "" : " · " + country), FontSize = 16, VerticalAlignment = VerticalAlignment.Center });

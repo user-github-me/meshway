@@ -23,8 +23,6 @@ for binary in sorted(Path('dist/bin').glob('meshway-*')):
             archive.add(binary,arcname='meshway')
             archive.add('LICENSE',arcname='LICENSE')
             archive.add('README.md',arcname='README.md')
-checksums=[f'{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}' for path in sorted(release.iterdir()) if path.is_file()]
-(release/'SHA256SUMS').write_text('\n'.join(checksums)+'\n')
 print('Local release artifacts created in release/. Nothing was published.')
 PY
 # Package the complete native bundles when they exist. No partial GUI-only
@@ -39,6 +37,9 @@ for runtime in ('win-x64','win-arm64'):
     required=('Meshway.exe','meshway-daemon.exe','meshway-vpn-helper.exe','wintun.dll','WINTUN-LICENSE.txt')
     if any(not (package/name).is_file() for name in required):
         raise SystemExit(f'Incomplete Windows bundle: {package}')
+    import shutil
+    architecture='amd64' if runtime=='win-x64' else 'arm64'
+    shutil.copy2(Path('dist/bin')/f'meshway-windows-{architecture}.exe',package/'meshway-daemon.exe')
     with zipfile.ZipFile(release/f'Meshway-{runtime}.zip','w',zipfile.ZIP_DEFLATED) as archive:
         for file in sorted(package.rglob('*')):
             if file.is_file(): archive.write(file, str(Path('Meshway')/file.relative_to(package)))
@@ -50,12 +51,24 @@ simple=Path('dist/Meshway.app')
 app=native if native.is_dir() else simple
 if app.is_dir() and __import__('sys').platform=='darwin':
     subprocess.run(['ditto','-c','-k','--keepParent',str(app),str(release/'Meshway-macos.zip')],check=True)
+    if native.is_dir() and simple.is_dir():
+        daemon=Path('dist/bin/meshway-darwin-arm64')
+        import shutil
+        shutil.copy2(daemon,simple/'Contents/Resources/meshway')
+        subprocess.run(['ditto','-c','-k','--keepParent',str(simple),str(release/'Meshway-macos-daemon-client.zip')],check=True)
+ios=Path('dist/apple-ios/Build/Products/Release-iphoneos/Meshway.app')
+if ios.is_dir() and __import__('sys').platform=='darwin':
+    subprocess.run(['ditto','-c','-k','--keepParent',str(ios),str(release/'Meshway-ios-unsigned.zip')],check=True)
 for browser in ('chrome','firefox'):
     extension=Path('apps/extension/dist')/browser
     if not extension.is_dir(): continue
     with zipfile.ZipFile(release/f'Meshway-extension-{browser}.zip','w',zipfile.ZIP_DEFLATED) as archive:
         for file in sorted(extension.rglob('*')):
             if file.is_file(): archive.write(file,str(file.relative_to(extension)))
+# Checksums are regenerated after packaging, never hash an older SHA256SUMS.
+import hashlib
+checksums=[f'{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}' for path in sorted(release.iterdir()) if path.is_file() and path.name!='SHA256SUMS']
+(release/'SHA256SUMS').write_text('\n'.join(checksums)+'\n')
 PY
 if [ -n "${MESHWAY_RELEASE_KEY_FILE:-}" ]; then
   : "${MESHWAY_RELEASE_VERSION:?Set release version}"

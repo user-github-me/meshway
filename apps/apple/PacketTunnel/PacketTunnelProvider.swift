@@ -8,6 +8,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     private let lifecycle = NSLock()
     private var node: MeshwayNode?
     private var stopped = true
+    private var generation: UInt64 = 0
 
     override func startTunnel(options: [String: NSObject]?, completionHandler: @escaping (Error?) -> Void) {
         guard let proto = protocolConfiguration as? NETunnelProviderProtocol,
@@ -18,6 +19,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
             completionHandler(NSError(domain: "MeshwayVPN", code: 2, userInfo: [NSLocalizedDescriptionKey: "Missing VPN server or shared-container entitlement."]))
             return
         }
+        lifecycle.lock(); generation &+= 1; let startGeneration = generation; stopped = false; lifecycle.unlock()
         worker.async { [weak self] in
             guard let self else { return }
             do {
@@ -27,13 +29,20 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
                 guard let node = MeshwayStartSecure(config, try NativeStateKey.loadOrCreate(), &startError) else {
                     throw startError ?? NSError(domain: "MeshwayVPN", code: 3)
                 }
-                self.lifecycle.lock(); self.node = node; self.stopped = false; self.lifecycle.unlock()
+                self.lifecycle.lock()
+                guard !self.stopped, self.generation == startGeneration else {
+                    self.lifecycle.unlock(); try? node.stop()
+                    completionHandler(NSError(domain: "MeshwayVPN", code: 4, userInfo: [NSLocalizedDescriptionKey: "VPN start was cancelled."]))
+                    return
+                }
+                self.node = node; self.lifecycle.unlock()
                 try node.connect(invitation)
                 try node.startPacketVPN(peerID)
                 let settings = self.networkSettings(plan: plan)
                 self.setTunnelNetworkSettings(settings) { [weak self] error in
                     guard let self else { return }
                     if let error { self.closeCore(); completionHandler(error); return }
+                    guard self.activeNode != nil else { completionHandler(NSError(domain: "MeshwayVPN", code: 4)); return }
                     self.reasserting = false
                     self.readOutgoingPackets()
                     self.output.async { [weak self] in self?.readIncomingPackets() }
@@ -97,7 +106,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     private func closeCore() {
-        lifecycle.lock(); stopped = true; let previous = node; node = nil; lifecycle.unlock()
+        lifecycle.lock(); generation &+= 1; stopped = true; let previous = node; node = nil; lifecycle.unlock()
         try? previous?.stopPacketVPN()
         try? previous?.stop()
     }

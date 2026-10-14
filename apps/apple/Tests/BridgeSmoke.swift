@@ -2,7 +2,7 @@ import Foundation
 import Meshway
 import Darwin
 
-func startNode(state: URL, exit: Bool, allowed: [String], resolver: String = "") throws -> MeshwayNode {
+func startNode(state: URL, exit: Bool, allowed: [String]) throws -> MeshwayNode {
     var error: NSError?
     let raw = MeshwayDefaultConfig(state.path, &error)
     if let error { throw error }
@@ -11,7 +11,6 @@ func startNode(state: URL, exit: Bool, allowed: [String], resolver: String = "")
     object["api_listen"] = ""; object["socks_listen"] = ""
     object["exit"] = exit; object["allow_private_targets"] = exit
     object["allowed_peers"] = allowed
-    if !resolver.isEmpty { object["vpn"] = ["enabled": true, "internet": true, "mtu": 1280] }
     // A random ephemeral testing key; no native secure-store reads are used.
     let key = Data((0..<32).map { _ in UInt8.random(in: 0...255) })
     guard let node = MeshwayStartSecure(String(decoding: try JSONSerialization.data(withJSONObject: object), as: UTF8.self), key, &error) else { throw error ?? NSError(domain: "smoke", code: 1) }

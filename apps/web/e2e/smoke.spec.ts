@@ -156,11 +156,18 @@ test('advertised server cards and opt-in map select a real authorized exit', asy
 });
 
 test('Chromium extension opts in and restores actual browser proxy settings', async () => {
+  test.setTimeout(60_000);
   const profile = mkdtempSync(resolve(tmpdir(), 'meshway-extension-'));
   const extension = resolve(repository, 'apps/extension/dist/chrome');
-  const context = await chromium.launchPersistentContext(profile, { headless: true, channel: 'chromium', executablePath: process.env.CHROMIUM_EXECUTABLE, args: [`--disable-extensions-except=${extension}`, `--load-extension=${extension}`] });
+  const context = await chromium.launchPersistentContext(profile, {
+    headless: true, channel: 'chromium', executablePath: process.env.CHROMIUM_EXECUTABLE,
+    // Recent Chromium enables extension debugging explicitly. This switch is
+    // confined to the disposable profile and the one locally built extension.
+    ignoreDefaultArgs: ['--disable-extensions'],
+    args: ['--enable-unsafe-extension-debugging', `--disable-extensions-except=${extension}`, `--load-extension=${extension}`],
+  });
   try {
-    const worker = context.serviceWorkers()[0] || await context.waitForEvent('serviceworker');
+    const worker = await test.step('load the isolated extension service worker', async () => context.serviceWorkers()[0] || await context.waitForEvent('serviceworker', { timeout: 15_000 }));
     const id = new URL(worker.url()).host;
     const original = await worker.evaluate(() => new Promise<unknown>(resolve => chrome.proxy.settings.get({ incognito: false }, resolve)));
     const page = await context.newPage();

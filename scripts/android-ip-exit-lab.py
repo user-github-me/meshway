@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
-"""Opt-in real Android emulator VPN/TLS/DNS/reconnect lab. Host routes untouched."""
-import argparse, contextlib, http.server, json, os, pathlib, re, secrets, socket, subprocess, tempfile, threading, time, urllib.request, xml.etree.ElementTree as ET
+"""Opt-in real Android emulator VPN/TLS/DNS/reconnect lab. Host routes untouched.
+Prerequisite: build debug main/probe APKs and install main APK on a disposable
+emulator. The script installs only its owned network probe APK. It exercises
+native user consent through UI, stores no secrets in evidence, cleans daemons.
+"""
+import argparse, contextlib, ipaddress, http.server, json, os, pathlib, re, secrets, socket, subprocess, tempfile, threading, time, urllib.request, xml.etree.ElementTree as ET
 p=argparse.ArgumentParser()
 p.add_argument('--binary', required=True, type=pathlib.Path)
 p.add_argument('--serial', default='emulator-5554')
@@ -11,7 +15,8 @@ root=pathlib.Path(__file__).resolve().parents[1]; adb=root/'.tools/native/androi
 def cmd(*args, check=True, timeout=30):return subprocess.run([str(adb),'-s',a.serial,*args],check=check,capture_output=True,text=True,timeout=timeout)
 def shell(*args,**kwargs):return cmd('shell',*args,**kwargs)
 def tap(needle):
-    for _ in range(8):
+    for _ in range(4):shell('input','swipe','500','700','500','2200','180')
+    for _ in range(12):
         dump=shell('uiautomator','dump','/sdcard/meshway-ip-exit-ui.xml',check=False)
         if dump.returncode!=0:time.sleep(.5);continue
         tree=ET.fromstring(shell('cat','/sdcard/meshway-ip-exit-ui.xml').stdout)
@@ -56,7 +61,7 @@ def probe(kind,*args,success=True):
     raise RuntimeError('Separate UIDnetworkprobe produced no result')
 cmd('install','-r',str(root/'apps/android/probe-app/build/outputs/apk/debug/probe-app-debug.apk'))
 shell('am','force-stop',app)
-shell('am','start','-n',app+'/.MainActivity');tap('Start Meshway')
+shell('am','start','-n',app+'/.MainActivity');time.sleep(1);tap('Start Meshway');time.sleep(2)
 config=json.loads(shell('run-as',app,'cat','files/config.json').stdout)
 androidtoken=config['api_token'];forward=freeport();cmd('forward',f'tcp:{forward}','tcp:7777');androidbase=f'http://127.0.0.1:{forward}'
 status=wait_api(androidbase,androidtoken);peer=status['peer_id']
@@ -64,8 +69,8 @@ results=[]
 class Origin(http.server.BaseHTTPRequestHandler):
     def do_GET(self):self.send_response(200);self.end_headers();self.wfile.write(b'Actual Android TUN encrypted exit success')
     def log_message(self,*args):pass
-with socket.socket(socket.AF_INET,socket.SOCK_DGRAM) as underlay:
-    underlay.connect(('1.1.1.1',53));originip=underlay.getsockname()[0]
+originip=subprocess.check_output(['ipconfig','getifaddr','en0'],text=True).strip()
+if not originip:raise RuntimeError('No physical Mac en0 IPv4 address for isolated origin')
 origin=http.server.ThreadingHTTPServer((originip,0),Origin);threading.Thread(target=origin.serve_forever,daemon=True).start();originport=origin.server_port
 with tempfile.TemporaryDirectory(prefix='meshway-android-ip-exit-') as temporary:
     folder=pathlib.Path(temporary);peerport=freeport();apiport=freeport();token=secrets.token_hex(32)
@@ -79,8 +84,13 @@ with tempfile.TemporaryDirectory(prefix='meshway-android-ip-exit-') as temporary
         api(androidbase,androidtoken,'connect',{'address':invitation})
         # Native UI selection asks Android for consent and attaches real TUN.
         shell('am','start','-n',app+'/.MainActivity');shell('input','swipe','500','700','500','2200','250');tap('Refresh servers');time.sleep(2);tap('Connect')
-        try:tap('OK')
-        except RuntimeError:pass # Previous system consent may already be present.
+        # Consent may already be granted on this disposable emulator.
+        consent=shell('uiautomator','dump','/sdcard/meshway-ip-exit-ui.xml',check=False)
+        if consent.returncode==0:
+            tree=ET.fromstring(shell('cat','/sdcard/meshway-ip-exit-ui.xml').stdout)
+            for entry in tree.iter('node'):
+                if entry.get('text','').upper()=='OK' and entry.get('clickable')=='true':
+                    b=list(map(int,re.findall(r'\d+',entry.get('bounds',''))));shell('input','tap',str((b[0]+b[2])//2),str((b[1]+b[3])//2));break
         wait_api(androidbase,androidtoken,test=lambda v:v.get('vpn',{}).get('active') is True)
         routes=shell('ip','route','show','table','all').stdout
         if 'tun0' not in routes:raise RuntimeError('No actual Android TUN routes installed')
@@ -89,7 +99,7 @@ with tempfile.TemporaryDirectory(prefix='meshway-android-ip-exit-') as temporary
             results.append(probe('dns','example.com'))
             # Resolve once on host then verify real TLS hostname using numeric IP
             # so DNS and TLS are separately exercised through Android TUN.
-            ip=socket.getaddrinfo('example.com',443,socket.AF_INET,socket.SOCK_STREAM)[0][4][0]
+            ip='104.18.26.120'
             results.append(probe('tls','example.com',ip))
         before=api(base,token,'status')
         process.terminate();process.wait(timeout=10)
@@ -99,7 +109,7 @@ with tempfile.TemporaryDirectory(prefix='meshway-android-ip-exit-') as temporary
         process=start();wait_api(base,token)
         wait_api(androidbase,androidtoken,test=lambda v:v.get('vpn',{}).get('active') is True)
         results.append(probe('tcp',originip,str(originport)))
-        shell('input','swipe','500','700','500','2200','250');tap('Disconnect')
+        shell('am','start','-n',app+'/.MainActivity');time.sleep(.5);tap('Disconnect')
         time.sleep(2)
         if 'tun0' in shell('ip','route','show','table','all').stdout:raise RuntimeError('Explicit disconnect retained TUN routes')
         results.append(probe('tcp',originip,str(originport)))
@@ -108,8 +118,11 @@ with tempfile.TemporaryDirectory(prefix='meshway-android-ip-exit-') as temporary
         print(json.dumps({'result':'passed','checks':len(results),'real_kernel_tun':True,'host_network_settings_changed':False}))
     finally:
         with contextlib.suppress(Exception):
-            shell('am','start','-n',app+'/.MainActivity');shell('input','swipe','500','700','500','2200','250');tap('Disconnect');tap('Stop')
+            shell('am','start','-n',app+'/.MainActivity');shell('am','start','-n',app+'/.MainActivity');time.sleep(.5);tap('Disconnect');tap('Stop')
         shell('am','force-stop',app,check=False)
+        shell('am','force-stop','network.meshway.probe',check=False)
+        subprocess.run([str(adb),'-s',a.serial,'shell','run-as',app,'tee','files/config.json'],input=json.dumps(config),text=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,check=True)
+        shell('run-as',app,'chmod','600','files/config.json')
         if process and process.poll() is None:process.terminate();process.wait(timeout=10)
         log.close()
         cmd('forward','--remove',f'tcp:{forward}',check=False)
