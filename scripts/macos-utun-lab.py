@@ -79,7 +79,7 @@ def execute(args):
     CONFIG.write_text(json.dumps(c)+'\n');CONFIG.chmod(0o600)
     private_log=open(STATE/'daemon.private.log','wb');os.chmod(STATE/'daemon.private.log',0o600)
     daemon=subprocess.Popen([str(BINARY),'daemon','--config',str(CONFIG)],stdout=private_log,stderr=private_log)
-    helper=None;owner=None;helper_log=None;phase='exit-authorization'
+    helper=None;owner=None;helper_log=None;phase='exit-authorization';cycle=None
     proof={'date':datetime.datetime.now(datetime.timezone.utc).isoformat(),'runner':'disposable GitHub-hosted macOS','version':run([BINARY,'version']).stdout.strip(),'binary_sha256':hashlib.sha256(BINARY.read_bytes()).hexdigest(),'development_host_mutated':False,'checks':{},'cycles':[]}
     before=baseline()
     def api(path,body=None):
@@ -150,13 +150,31 @@ def execute(args):
                 proof['resolver_mismatch']={'expected_virtual_resolver_present':False}
                 raise RuntimeError('Virtual DNS resolver not present in actual macOS configuration.')
             cycle['virtual_dns_resolver_present']=True
+            cycle['virtual_dns_routes']={}
+            for family,target in [('ipv4','10.77.0.1'),('ipv6','fd77::1')]:
+                lookup_route=run(['/sbin/route','-n','get',*(['-inet6'] if family=='ipv6' else []),target],check=False)
+                observed=re.search(r'(?m)^\s*interface:\s*([A-Za-z0-9]+)\s*$',lookup_route.stdout)
+                cycle['virtual_dns_routes'][family]={'interface':observed.group(1) if observed else None,'owned_interface':bool(observed and observed.group(1)==device)}
             traffic_before=api('/v1/status')
             import uuid
             phase=mode+':native-dns'
             probe_hostname='meshway-'+uuid.uuid4().hex+'.example.com'
             # Run the native resolver in a bounded child; a fresh NXDOMAIN
             # proves DNS packets crossed the interface without a cached name.
-            lookup=run([sys.executable,'-c','import socket,sys\ntry: socket.getaddrinfo(sys.argv[1],443,proto=socket.IPPROTO_TCP)\nexcept socket.gaierror: pass',probe_hostname],timeout=20,check=False)
+            cycle['native_dns_packet_counters_before']={key:traffic_before.get(key,0) for key in ['bytes_sent','bytes_received']}
+            try:
+                lookup=run([sys.executable,'-c','import socket,sys\ntry: socket.getaddrinfo(sys.argv[1],443,proto=socket.IPPROTO_TCP)\nexcept socket.gaierror: pass',probe_hostname],timeout=20,check=False)
+            except subprocess.TimeoutExpired:
+                after_timeout=api('/v1/status')
+                cycle['native_dns_packet_counters_after_timeout']={key:after_timeout.get(key,0) for key in ['bytes_sent','bytes_received']}
+                # A separate fixed public A query to the virtual IPv4 resolver
+                # isolates resolver selection from actual captured UDP I/O.
+                probe=run([sys.executable,'-c','import socket,struct,json\ns=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.settimeout(5)\nq=struct.pack("!HHHHHH",18723,256,1,0,0,0)+b"\\x07example\\x03com\\x00"+struct.pack("!HH",1,1)\ntry:\n s.sendto(q,("10.77.0.1",53));a,_=s.recvfrom(4096);h=struct.unpack("!HHHHHH",a[:12]);print(json.dumps({"reply":h[0]==18723,"rcode":h[1]&15,"answers":h[3]}))\nexcept OSError: print(json.dumps({"reply":False}))\nfinally:s.close()'],timeout=8,check=False)
+                try:cycle['controlled_virtual_dns_udp']=json.loads(probe.stdout)
+                except ValueError:cycle['controlled_virtual_dns_udp']={'reply':False}
+                after_probe=api('/v1/status')
+                cycle['controlled_dns_packet_counters_after']={key:after_probe.get(key,0) for key in ['bytes_sent','bytes_received']}
+                raise RuntimeError('Native resolver lookup exceeded20s; bounded virtual DNS route/packet diagnostics recorded.')
             if lookup.returncode:raise RuntimeError('Bounded native DNS lookup failed.')
             traffic_after_dns=api('/v1/status')
             cycle['native_dns_lookup']=True
@@ -190,12 +208,14 @@ def execute(args):
             cycle['no_active_helper_or_cleanup_pending']=not status.get('running') and not status.get('network_cleanup_pending')
             if not cycle['no_active_helper_or_cleanup_pending']:raise RuntimeError('Owned helper retained cleanup state.')
             proof['cycles'].append(cycle)
+            cycle=None
             print(json.dumps({'cycle':mode,'status':'PASS'}),flush=True)
         proof['status']='PASS'
         proof['ipv6_internet_limitation']='Actual IPv6 kernel capture route verified; public IPv6 egress requires a separately dual-stack exit and is not asserted here.'
         proof['crash_limitation']='SIGKILL recovery invokes explicit privileged Stop; no persistent crash firewall kill switch is claimed.'
     except Exception as error:
         proof['status']='FAIL';proof['phase']=phase;proof['error']=str(error)[:768]
+        if cycle:proof['partial_cycle']=cycle
         if helper_log and 'helper_diagnostic' not in proof:
             proof['helper_diagnostic']={'phase':phase,'exit_code':helper.poll() if helper else None,'last_cli_error':safe_helper_failure(pathlib.Path(helper_log.name))}
     finally:
