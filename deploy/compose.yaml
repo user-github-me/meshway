@@ -1,5 +1,6 @@
 services:
   meshway:
+    image: ghcr.io/user-github-me/meshway:0.1.0-alpha.1
     build:
       context: ..
       dockerfile: deploy/Dockerfile

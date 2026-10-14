@@ -76,6 +76,13 @@ export async function installCore({ base = projectReleaseBase, publisherKey, exp
   const destination = join(directory, name);
   const data = await download(new URL(name, release), 96 * 1024 * 1024, fetchImpl);
   if (sha256(data) !== expected) throw new Error('Binary checksum mismatch. Nothing was installed.');
+  const notices = [];
+  for (const companion of ['LICENSE', 'THIRD_PARTY_NOTICES.txt']) {
+    if (!manifest.files[companion]) continue;
+    const contents = await download(new URL(companion, release), 8 * 1024 * 1024, fetchImpl);
+    if (sha256(contents) !== manifest.files[companion]) throw new Error('Release license checksum mismatch. Nothing was installed.');
+    notices.push([companion, contents]);
+  }
   await mkdir(directory, { recursive: true, mode: 0o700 });
   const temporary = `${destination}.${randomBytes(8).toString('hex')}.tmp`;
   const lockPath = join(directory, '.install.lock');
@@ -100,6 +107,7 @@ export async function installCore({ base = projectReleaseBase, publisherKey, exp
     await writeFile(`${destination}.pub.pem`, canonicalKey, { mode: 0o600 });
     await writeFile(`${destination}.release.json`, metadata, { mode: 0o600 });
     await writeFile(`${destination}.release.sig`, signature, { mode: 0o600 });
+    for (const [companion, contents] of notices) await writeFile(`${destination}.${companion}`, contents, { mode: 0o600 });
     await rename(temporary, destination);
   } finally { await rm(temporary, { force: true }); await lock.close(); await rm(lockPath, { force: true }); }
   return destination;

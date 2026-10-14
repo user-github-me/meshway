@@ -1,0 +1,10 @@
+{
+  "physical_vpn": "Separate isolated Wintun routing test required",
+  "daemon_runtime": "PASS",
+  "host_network_modified": false,
+  "graceful_shutdown": "PASS",
+  "api_authentication": "PASS",
+  "time": "2026-10-14T01:24:22.9719724Z",
+  "desktop_window": false,
+  "platform": "Windows"
+}

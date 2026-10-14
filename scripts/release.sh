@@ -22,11 +22,15 @@ for binary in sorted(Path('dist/bin').glob('meshway-*')):
             archive.write(binary,'meshway.exe')
             archive.write('LICENSE','LICENSE')
             archive.write('README.md','README.md')
+            if Path('THIRD_PARTY_NOTICES.txt').is_file(): archive.write('THIRD_PARTY_NOTICES.txt','THIRD_PARTY_NOTICES.txt')
     else:
         with tarfile.open(release/f'{name}.tar.gz','w:gz') as archive:
             archive.add(binary,arcname='meshway')
             archive.add('LICENSE',arcname='LICENSE')
             archive.add('README.md',arcname='README.md')
+            if Path('THIRD_PARTY_NOTICES.txt').is_file(): archive.add('THIRD_PARTY_NOTICES.txt',arcname='THIRD_PARTY_NOTICES.txt')
+if Path('THIRD_PARTY_NOTICES.txt').is_file(): shutil.copy2('THIRD_PARTY_NOTICES.txt',release/'THIRD_PARTY_NOTICES.txt')
+shutil.copy2('LICENSE',release/'LICENSE')
 print('Local release artifacts created in release/. Nothing was published.')
 PY
 # Package the complete native bundles when they exist. No partial GUI-only
@@ -44,6 +48,7 @@ for runtime in ('win-x64','win-arm64'):
     import shutil
     architecture='amd64' if runtime=='win-x64' else 'arm64'
     shutil.copy2(Path('dist/bin')/f'meshway-windows-{architecture}.exe',package/'meshway-daemon.exe')
+    if Path('THIRD_PARTY_NOTICES.txt').is_file(): shutil.copy2('THIRD_PARTY_NOTICES.txt',package/'THIRD_PARTY_NOTICES.txt')
     with zipfile.ZipFile(release/f'Meshway-{runtime}.zip','w',zipfile.ZIP_DEFLATED) as archive:
         for file in sorted(package.rglob('*')):
             if file.is_file(): archive.write(file, str(Path('Meshway')/file.relative_to(package)))
@@ -54,12 +59,15 @@ native=Path('dist/apple-macos/Build/Products/Release/Meshway.app')
 simple=Path('dist/Meshway.app')
 app=native if native.is_dir() else simple
 if app.is_dir() and __import__('sys').platform=='darwin':
+    if native.is_dir():
+        subprocess.run(['lipo','-create','dist/bin/meshway-darwin-amd64','dist/bin/meshway-darwin-arm64','-output',str(native/'Contents/Resources/meshway')],check=True)
     subprocess.run(['ditto','-c','-k','--keepParent',str(app),str(release/'Meshway-macos.zip')],check=True)
     if native.is_dir() and simple.is_dir():
         daemon=Path('dist/bin/meshway-darwin-arm64')
         import shutil
         shutil.copy2(daemon,simple/'Contents/Resources/meshway')
-        subprocess.run(['ditto','-c','-k','--keepParent',str(simple),str(release/'Meshway-macos-daemon-client.zip')],check=True)
+        subprocess.run(['ditto','-c','-k','--keepParent',str(simple),str(release/'Meshway-macos-arm64-daemon-client.zip')],check=True)
+        (release/'Meshway-macos-daemon-client.zip').unlink(missing_ok=True)
 ios=Path('dist/apple-ios/Build/Products/Release-iphoneos/Meshway.app')
 if ios.is_dir() and __import__('sys').platform=='darwin':
     subprocess.run(['ditto','-c','-k','--keepParent',str(ios),str(release/'Meshway-ios-unsigned.zip')],check=True)
@@ -69,6 +77,12 @@ for browser in ('chrome','firefox'):
     with zipfile.ZipFile(release/f'Meshway-extension-{browser}.zip','w',zipfile.ZIP_DEFLATED) as archive:
         for file in sorted(extension.rglob('*')):
             if file.is_file(): archive.write(file,str(file.relative_to(extension)))
+if Path('THIRD_PARTY_NOTICES.txt').is_file():
+    for name in ('Meshway-macos.zip','Meshway-macos-arm64-daemon-client.zip','Meshway-ios-unsigned.zip','Meshway-extension-chrome.zip','Meshway-extension-firefox.zip'):
+        archive_path=release/name
+        if not archive_path.is_file(): continue
+        with zipfile.ZipFile(archive_path,'a',zipfile.ZIP_DEFLATED) as archive:
+            archive.write('THIRD_PARTY_NOTICES.txt','THIRD_PARTY_NOTICES.txt')
 # Checksums are regenerated after packaging, never hash an older SHA256SUMS.
 import hashlib
 checksums=[f'{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}' for path in sorted(release.iterdir()) if path.is_file() and path.name!='SHA256SUMS']

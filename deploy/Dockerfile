@@ -16,6 +16,7 @@ RUN CGO_ENABLED=0 GOOS="${TARGETOS:-linux}" GOARCH="${TARGETARCH:-$(go env GOARC
 FROM ${RUNTIME_IMAGE}
 RUN apk add --no-cache ca-certificates && addgroup -S meshway && adduser -S -G meshway meshway && mkdir -p /var/lib/meshway && chown meshway:meshway /var/lib/meshway
 COPY --from=build /out/meshway /usr/local/bin/meshway
+COPY LICENSE THIRD_PARTY_NOTICES.txt /usr/share/licenses/meshway/
 USER meshway
 WORKDIR /var/lib/meshway
 VOLUME ["/var/lib/meshway"]

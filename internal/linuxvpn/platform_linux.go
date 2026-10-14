@@ -5,6 +5,8 @@ package linuxvpn
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -30,6 +32,9 @@ type route struct {
 	Family int      `json:"family"`
 	Args   []string `json:"args"`
 }
+
+const routeProtocol = 186
+
 type journal struct {
 	Version   int     `json:"version"`
 	Config    string  `json:"config"`
@@ -43,6 +48,7 @@ type journal struct {
 	Firewall  bool    `json:"firewall"`
 	DNS       bool    `json:"dns"`
 	Started   bool    `json:"started"`
+	Metric    uint32  `json:"route_metric"`
 }
 type apiStatus struct {
 	Upstream string `json:"upstream_peer"`
@@ -57,11 +63,13 @@ type underlay struct {
 	Port      uint16
 }
 type ipRoute struct {
-	Dst     string `json:"dst"`
-	Gateway string `json:"gateway"`
-	Device  string `json:"dev"`
-	Source  string `json:"prefsrc"`
-	Type    string `json:"type"`
+	Dst      string          `json:"dst"`
+	Gateway  string          `json:"gateway"`
+	Device   string          `json:"dev"`
+	Source   string          `json:"prefsrc"`
+	Type     string          `json:"type"`
+	Protocol json.RawMessage `json:"protocol"`
+	Metric   uint32          `json:"metric"`
 }
 
 func command(input []byte, name string, args ...string) ([]byte, error) {
@@ -88,6 +96,27 @@ func lock(o Options) (*os.File, error) {
 		return nil, errors.New("Linux full-device VPN needs administrator privileges; run sudo meshway vpn start --config /absolute/path/config.json")
 	}
 	dir := runtimeDir(o)
+	if !filepath.IsAbs(dir) || filepath.Clean(dir) != dir {
+		return nil, errors.New("VPN runtime directory must be an absolute clean path")
+	}
+	// Every existing ancestor must be protected from unprivileged replacement.
+	// Checking only the final directory would permit a user-owned parent to
+	// replace it while this privileged helper writes its journal.
+	for parent := dir; ; parent = filepath.Dir(parent) {
+		info, err := os.Lstat(parent)
+		if err != nil && !os.IsNotExist(err) {
+			return nil, err
+		}
+		if err == nil {
+			stat, ok := info.Sys().(*syscall.Stat_t)
+			if !ok || stat.Uid != 0 || !info.IsDir() || info.Mode().Perm()&0022 != 0 {
+				return nil, errors.New("VPN runtime directory ancestors must be root-owned directories without group/world write access")
+			}
+		}
+		if parent == "/" {
+			break
+		}
+	}
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return nil, err
 	}
@@ -155,7 +184,7 @@ func load(o Options) (journal, error) {
 	if err = json.Unmarshal(body, &j); err != nil {
 		return j, err
 	}
-	if j.Version != 1 {
+	if j.Version != 2 || j.Metric < 65536 {
 		return j, errors.New("VPN journal version unsupported")
 	}
 	if err = ValidateOptions(Options{ConfigPath: j.Config, Device: j.Device, DNSMode: j.DNSMode}); err != nil {
@@ -247,6 +276,62 @@ func routes(family int, args ...string) ([]byte, error) {
 	return command(nil, "ip", args...)
 }
 
+func ownedRouteArgs(j *journal, r route) []string {
+	return append(append([]string(nil), r.Args...), "proto", strconv.Itoa(routeProtocol), "metric", strconv.FormatUint(uint64(j.Metric), 10))
+}
+
+func routeStillOwned(j *journal, r route, found ipRoute) bool {
+	protocol := strings.Trim(string(found.Protocol), "\"")
+	device, gateway := r.Args[2], ""
+	if len(r.Args) == 5 {
+		device, gateway = r.Args[4], r.Args[2]
+	}
+	return protocol == strconv.Itoa(routeProtocol) && found.Metric == j.Metric && found.Device == device && found.Gateway == gateway
+}
+
+func linkExists(device string) (bool, error) {
+	body, err := command(nil, "ip", "-j", "link", "show")
+	if err != nil {
+		return false, err
+	}
+	var links []struct {
+		Name string `json:"ifname"`
+	}
+	if err = json.Unmarshal(body, &links); err != nil {
+		return false, err
+	}
+	for _, link := range links {
+		if link.Name == device {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func tableExists(name string) (bool, error) {
+	body, err := command(nil, "nft", "-j", "list", "tables")
+	if err != nil {
+		return false, err
+	}
+	var list struct {
+		Items []struct {
+			Table *struct {
+				Family string `json:"family"`
+				Name   string `json:"name"`
+			} `json:"table"`
+		} `json:"nftables"`
+	}
+	if err = json.Unmarshal(body, &list); err != nil {
+		return false, err
+	}
+	for _, item := range list.Items {
+		if item.Table != nil && item.Table.Family == "inet" && item.Table.Name == name {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func Start(o Options) (err error) {
 	if err = ValidateOptions(o); err != nil {
 		return err
@@ -258,6 +343,8 @@ func Start(o Options) (err error) {
 	defer guard.Close()
 	if _, err = os.Stat(filepath.Join(runtimeDir(o), "journal.json")); err == nil {
 		return errors.New("a VPN setup journal exists; run meshway vpn stop first to restore it")
+	} else if !os.IsNotExist(err) {
+		return err
 	}
 	c, owner, err := readConfig(o.ConfigPath)
 	if err != nil {
@@ -294,10 +381,14 @@ func Start(o Options) (err error) {
 	if len(endpoints) == 0 {
 		return errors.New("server/relay needs reachable literal IP invitations before full-device VPN")
 	}
-	if _, err = command(nil, "ip", "link", "show", "dev", o.Device); err == nil {
+	if exists, inspectErr := linkExists(o.Device); inspectErr != nil {
+		return inspectErr
+	} else if exists {
 		return errors.New("VPN interface already exists; choose an unused device name")
 	}
-	if _, err = command(nil, "nft", "list", "table", "inet", "meshway_vpn"); err == nil {
+	if exists, inspectErr := tableExists("meshway_vpn"); inspectErr != nil {
+		return inspectErr
+	} else if exists {
 		return errors.New("Meshway firewall table already exists; restore previous setup first")
 	}
 	for _, item := range []struct {
@@ -316,7 +407,11 @@ func Start(o Options) (err error) {
 			return errors.New("an existing VPN already owns a full-traffic capture route; stop it before Meshway device VPN")
 		}
 	}
-	j := journal{Version: 1, Config: o.ConfigPath, Device: o.Device, DNSMode: o.DNSMode, Table: "meshway_vpn"}
+	var random [4]byte
+	if _, err = rand.Read(random[:]); err != nil {
+		return err
+	}
+	j := journal{Version: 2, Config: o.ConfigPath, Device: o.Device, DNSMode: o.DNSMode, Table: "meshway_vpn", Metric: binary.BigEndian.Uint32(random[:]) | 65536}
 	if o.DNSMode == "file" {
 		info, readErr := os.Lstat("/etc/resolv.conf")
 		if readErr != nil {
@@ -361,6 +456,7 @@ func Start(o Options) (err error) {
 	if err = api(c, "POST", "/v1/vpn/start", map[string]string{"mode": "exit", "device": o.Device, "peer_id": status.Upstream}, nil); err != nil {
 		return err
 	}
+	physical := map[string]bool{}
 	for _, endpoint := range endpoints {
 		family := 4
 		prefix := endpoint.IP.String() + "/32"
@@ -376,9 +472,6 @@ func Start(o Options) (err error) {
 		if json.Unmarshal(existing, &current) != nil {
 			return errors.New("cannot inspect bypass routes")
 		}
-		if len(current) > 0 {
-			continue
-		}
 		found, outErr := routes(family, "-j", "route", "get", endpoint.IP.String())
 		if outErr != nil {
 			if endpoint.IP.Is6() {
@@ -390,6 +483,10 @@ func Start(o Options) (err error) {
 		if json.Unmarshal(found, &best) != nil || len(best) == 0 || best[0].Device == "" || best[0].Device == o.Device {
 			return errors.New("server underlay route unavailable")
 		}
+		physical[best[0].Device] = true
+		if len(current) > 0 {
+			continue
+		}
 		args := []string{prefix}
 		if best[0].Gateway != "" {
 			args = append(args, "via", best[0].Gateway)
@@ -399,7 +496,7 @@ func Start(o Options) (err error) {
 		if err = save(o, j); err != nil {
 			return err
 		}
-		if _, err = routes(family, append([]string{"route", "add"}, args...)...); err != nil {
+		if _, err = routes(family, append([]string{"route", "add"}, ownedRouteArgs(&j, j.Routes[len(j.Routes)-1])...)...); err != nil {
 			return err
 		}
 	}
@@ -407,7 +504,7 @@ func Start(o Options) (err error) {
 	if err = save(o, j); err != nil {
 		return err
 	}
-	if _, err = command([]byte(firewall(o.Device, endpoints)), "nft", "-f", "-"); err != nil {
+	if _, err = command([]byte(firewall(o.Device, endpoints, physical)), "nft", "-f", "-"); err != nil {
 		return err
 	}
 	for _, r := range []route{{4, []string{"0.0.0.0/1", "dev", o.Device}}, {4, []string{"128.0.0.0/1", "dev", o.Device}}, {6, []string{"::/1", "dev", o.Device}}, {6, []string{"8000::/1", "dev", o.Device}}} {
@@ -415,7 +512,7 @@ func Start(o Options) (err error) {
 		if err = save(o, j); err != nil {
 			return err
 		}
-		if _, err = routes(r.Family, append([]string{"route", "add"}, r.Args...)...); err != nil {
+		if _, err = routes(r.Family, append([]string{"route", "add"}, ownedRouteArgs(&j, r)...)...); err != nil {
 			return err
 		}
 	}
@@ -436,9 +533,24 @@ func Start(o Options) (err error) {
 	}
 	return nil
 }
-func firewall(device string, endpoints []underlay) string {
+func firewall(device string, endpoints []underlay, physical map[string]bool) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "table inet meshway_vpn { chain output { type filter hook output priority -10; policy accept; oifname \"lo\" accept; oifname \"%s\" accept;\n", device)
+	interfaces := make([]string, 0, len(physical))
+	for nic := range physical {
+		interfaces = append(interfaces, nic)
+	}
+	sort.Strings(interfaces)
+	for _, nic := range interfaces {
+		// Neighbor discovery is required again after the physical neighbor cache
+		// expires. Hop limit 255 and these four control types prevent ordinary
+		// ICMPv6 data traffic from using this physical-interface exception.
+		fmt.Fprintf(&b, "oifname %q ip6 hoplimit 255 icmpv6 type { 133, 134 } ip6 daddr { fe80::/10, ff02::/16 } accept;\n", nic)
+		fmt.Fprintf(&b, "oifname %q ip6 hoplimit 255 icmpv6 type { 135, 136 } accept;\n", nic)
+		// Preserve lease renewal from privileged DHCP client source ports.
+		fmt.Fprintf(&b, "oifname %q ip protocol udp udp sport 68 udp dport 67 accept;\n", nic)
+		fmt.Fprintf(&b, "oifname %q ip6 daddr { fe80::/10, ff02::/16 } udp sport 546 udp dport 547 accept;\n", nic)
+	}
 	for _, e := range endpoints {
 		family := "ip"
 		if e.IP.Is6() {
@@ -519,10 +631,14 @@ func rollback(o Options, j *journal, c config.Config) error {
 	}
 	for i := len(j.Routes) - 1; i >= 0; i-- {
 		r := j.Routes[i]
-		if _, err := routes(r.Family, append([]string{"route", "del"}, r.Args...)...); err != nil {
-			body, inspectErr := routes(r.Family, "-j", "route", "show", "exact", r.Args[0])
+		if _, err := routes(r.Family, append([]string{"route", "del"}, ownedRouteArgs(j, r)...)...); err != nil {
+			body, inspectErr := routes(r.Family, "-N", "-j", "route", "show", "exact", r.Args[0])
 			var remaining []ipRoute
-			if inspectErr != nil || json.Unmarshal(body, &remaining) != nil || len(remaining) > 0 {
+			uncertain := inspectErr != nil || json.Unmarshal(body, &remaining) != nil
+			for _, found := range remaining {
+				uncertain = uncertain || routeStillOwned(j, r, found)
+			}
+			if uncertain {
 				failures = append(failures, "owned route restore failed")
 			}
 		}
@@ -536,15 +652,33 @@ func rollback(o Options, j *journal, c config.Config) error {
 		_ = api(c, "POST", "/v1/vpn/stop", map[string]bool{}, nil)
 	}
 	if j.Created {
-		if _, err := command(nil, "ip", "tuntap", "del", "dev", j.Device, "mode", "tun"); err != nil {
-			if _, existsErr := command(nil, "ip", "link", "show", "dev", j.Device); existsErr == nil {
+		_, deleteErr := command(nil, "ip", "tuntap", "del", "dev", j.Device, "mode", "tun")
+		exists, inspectErr := linkExists(j.Device)
+		if inspectErr != nil {
+			return fmt.Errorf("TUN cleanup could not be confirmed: %w", inspectErr)
+		}
+		if exists {
+			// Clearing persistence does not remove a TUN that a live daemon still
+			// holds open. Force removal of our owned interface when API shutdown
+			// is unavailable, then verify before dropping the blocking firewall.
+			if _, err := command(nil, "ip", "link", "delete", "dev", j.Device); err != nil {
+				if deleteErr != nil {
+					return deleteErr
+				}
 				return err
+			}
+			if exists, inspectErr = linkExists(j.Device); inspectErr != nil {
+				return fmt.Errorf("TUN cleanup could not be confirmed: %w", inspectErr)
+			} else if exists {
+				return errors.New("owned TUN still exists; cleanup protection retained")
 			}
 		}
 	}
 	if j.Firewall {
 		if _, err := command(nil, "nft", "delete", "table", "inet", j.Table); err != nil {
-			if _, existsErr := command(nil, "nft", "list", "table", "inet", j.Table); existsErr == nil {
+			if exists, inspectErr := tableExists(j.Table); inspectErr != nil {
+				return fmt.Errorf("firewall cleanup could not be confirmed: %w", inspectErr)
+			} else if exists {
 				return err
 			}
 		}

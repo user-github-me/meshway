@@ -6,7 +6,7 @@ Go powers Meshway's shared networking core. Kotlin/Android VpnService, Swift/App
 
 The simple SwiftUI daemon client builds with `scripts/build.sh` followed by `apps/macos/build.sh`. The native full-device VPN products build with `apps/apple/build.sh macos`, `apps/apple/build.sh ios`, or `apps/ios/build.sh`. Xcode and pinned gomobile produce a shared XCFramework and actual app/provider bundles. See [DESKTOP_VPN.md](DESKTOP_VPN.md) for entitlements, Keychain storage, state migration and provider lifecycle.
 
-The app starts its own daemon, shows actual server/account state and file-picker recovery actions, and switches to the provider for full-device traffic. Apple requires valid owner team profiles to install/run the packet extension. Unsigned Release macOS/iOS builds and a real Swift↔Go packet bridge test passed. Fourteen Swift tests include actual daemon configuration acceptance and protected-state migration. The development Mac's active VPN, routes, DNS and proxy were never changed by these checks.
+The app starts its own daemon, shows actual server/account state and file-picker recovery actions, and switches to the provider for full-device traffic. Apple requires valid owner team profiles to install/run the packet extension. Unsigned Release macOS/iOS builds and a real Swift↔Go packet bridge test passed. Fifteen Swift tests include actual daemon configuration acceptance, rejected destructive account actions and protected-state migration. The development Mac's active VPN, routes, DNS and proxy were never changed by these checks.
 
 ## Windows
 

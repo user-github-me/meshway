@@ -49,6 +49,20 @@ test('checksum mismatch leaves no installed file', () => temporary(async directo
   assert.deepEqual(await readdir(directory), []);
 }));
 
+test('installs signed license notices and rejects changed notice bytes before writing', () => temporary(async directory => {
+  const notices = Buffer.from('Upstream copyright and license terms');
+  const metadata = JSON.parse(fixture().metadata);
+  metadata.files['THIRD_PARTY_NOTICES.txt'] = createHash('sha256').update(notices).digest('hex');
+  const bytes = Buffer.from(JSON.stringify(metadata));
+  const signature = sign(null, bytes, keys.privateKey);
+  const fetchImpl = async url => new Response(url.pathname.endsWith('RELEASE.json') ? bytes : url.pathname.endsWith('RELEASE.json.sig') ? signature : url.pathname.endsWith('THIRD_PARTY_NOTICES.txt') ? notices : data);
+  const damaged = async url => url.pathname.endsWith('THIRD_PARTY_NOTICES.txt') ? new Response('changed terms') : fetchImpl(url);
+  await assert.rejects(installCore({ ...options, directory, fetchImpl: damaged }), /license checksum/);
+  assert.deepEqual(await readdir(directory), []);
+  const binary = await installCore({ ...options, directory, fetchImpl });
+  assert.deepEqual(await readFile(`${binary}.THIRD_PARTY_NOTICES.txt`), notices);
+}));
+
 test('bundled pin rejects unknown publisher, tampered metadata, wrong key, truncated signature and expired release', () => temporary(async directory => {
   const f = fixture();
   await assert.rejects(installCore({ ...options, publisherKey: undefined, directory, fetchImpl: f.fetchImpl }), /signature/);

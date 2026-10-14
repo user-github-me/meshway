@@ -5,6 +5,7 @@ FROM ${RUNTIME_IMAGE}
 ARG TARGETARCH=arm64
 RUN if [ ! -s /etc/ssl/certs/ca-certificates.crt ]; then apk add --no-cache ca-certificates; fi && addgroup -S meshway && adduser -S -G meshway meshway && mkdir -p /var/lib/meshway && chown meshway:meshway /var/lib/meshway
 COPY dist/bin/meshway-linux-${TARGETARCH} /usr/local/bin/meshway
+COPY LICENSE THIRD_PARTY_NOTICES.txt /usr/share/licenses/meshway/
 USER meshway
 WORKDIR /var/lib/meshway
 VOLUME ["/var/lib/meshway"]

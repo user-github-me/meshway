@@ -1,0 +1,31 @@
+# Meshway public relay
+
+Meshway operates one owner-managed public encrypted bootstrap/circuit-v2 relay in Azure East Asia (Hong Kong). The operator explicitly authorized this persistent deployment. Its verified public invitations are in [public-bootstrap.json](../config/public-bootstrap.json); live deployment evidence is in [public-relay.json](../artifacts/public-relay.json).
+
+This node provides encrypted peer transport and NAT traversal assistance. It does not provide an internet exit: `exit` is disabled, the inbound gateway allowlist is empty, and SOCKS is disabled. To browse through Meshway, connect to your own private server or an explicitly consenting exit that authorizes your device. The relay cannot decrypt end-to-end libp2p streams, but its operator and hosting provider can see peer IP addresses, timing, sizes and relay connection metadata. Anonymity and universal NAT reachability are not promised.
+
+## Joining
+
+Generate your own configuration with `meshway init --config meshway.json`. Copy the `bootstrap_peers` array from `config/public-bootstrap.json` into that private configuration, then start the daemon. These invitations contain public peer IDs, never authentication keys. Preserve your existing private API token, recovery backup and state directory. The JSON public-bootstrap file is public invitation metadata, not a complete daemon configuration.
+
+The dashboard and native apps can also save the relay invitation using Add server / Connect peer. A relay-only entry cannot be selected as an internet exit. Both TCP and QUIC/UDP use public port 4001. A restrictive network may allow only one transport; NAT traversal remains dependent on both participants’ networks. Keeping a direct path when available avoids relay circuit limits.
+
+## Operating limits and consent
+
+The existing relay policy permits at most 128 reservations and 16 simultaneous circuits, with one reservation per peer, eight per IP and 32 per ASN. Reservations expire after one hour. Each relayed circuit is limited to two minutes and 64 MiB. Clients must reconnect or establish a direct path when a circuit reaches its limit. These bounds reduce shared resource usage; they are not an unlimited capacity or availability guarantee.
+
+Only use the public relay for lawful traffic and with the destination peer’s permission. Internet exits require separate explicit approval and destination authorization. The maintainer may revoke invitations, deny abusive participants or shut down the experimental relay. Report security vulnerabilities through [private vulnerability reporting](https://github.com/user-github-me/meshway/security/advisories/new). For operational abuse, contact [the maintainer](https://github.com/user-github-me); do not include keys, API tokens or private traffic in public issues. A mature abuse-response and reputation system remains future work.
+
+## Deployment and cost
+
+`scripts/azure-deploy-relay.py --deploy` creates one dedicated `meshway-public-relay-*` resource group using the owner’s existing Azure CLI login. Successful resources stay running. Failed creation is rolled back only within the new dedicated resource group. The VM is `Standard_B1s` with a 30-GB Standard-LRS OS disk and a static Standard public IPv4 address. Approximate recurring infrastructure is USD 15–25 per month before outgoing bandwidth and taxes; actual account discounts, region rates and billing determine the charge. Public Azure bandwidth can add cost under sustained use. Review the Azure budget and alerts for this dedicated group.
+
+The VM runs the verified Linux core as an unprivileged `meshway` system user. systemd restarts failures; protects the system filesystem, home directories and kernel controls; removes capabilities; and limits memory, tasks and open files. Configuration and persistent identity are private under `/var/lib/meshway`. The API listens only on `127.0.0.1:7777`, while SOCKS and internet exit forwarding are disabled. Public NSG ingress permits only TCP/UDP 4001 and owner-source-restricted key-only SSH on TCP 443. Password and root SSH authentication are disabled.
+
+The deploy script generates an SSH key in ignored `.tools/deploy/live` with directory mode 0700 and key mode 0600. Its private deployment record includes the administrative source address; neither this record nor credentials are committed. Server credentials are generated on the server and are never copied into published metadata. Keep the operator SSH key backed up privately. If the owner’s public IP changes, update only the dedicated `OwnerSSH` NSG source address in Azure before administering the node.
+
+Build the local verification binaries with `go build -o .tools/deploy-relay-cli ./cmd/meshway` and `go build -o .tools/deploy-relay-net-lab ./cmd/meshway-net-lab`. `python3 scripts/azure-deploy-relay.py --verify-existing` checks the persisted owned group/tag, performs a real encrypted public connection and relay reservation over TCP and QUIC, restarts the owned service, and verifies stable peer identity and reconnection. It also forces a real public circuit between two isolated local peers and round-trips 32 KiB of random bytes to an explicitly allowed owned TCP fixture, checking an observed circuit-limited transport. It creates ephemeral loopback clients, cleans them up, and never changes development-host routes, DNS, VPN or proxy settings. Restarting the service briefly interrupts current relay circuits; run verification during an announced maintenance window.
+
+`python3 scripts/azure-deploy-relay.py --update-existing --linux-binary dist/bin/meshway-linux-amd64` installs a verified replacement binary atomically, preserving the existing configuration and peer identity. It runs the same real transport and circuit checks and restores the previous owned binary/service if validation fails. This also interrupts current relay circuits.
+
+To decommission, verify the exact resource group in `artifacts/public-relay.json`, then delete that dedicated group through Azure and remove/update the published invitations. Do not delete unrelated resource groups. The relay is experimental shared infrastructure, without a service-level availability guarantee or independent security audit.

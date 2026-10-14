@@ -21,12 +21,18 @@ The systemd example drops capabilities and cannot create TUN devices. If enablin
 Docker Desktop/Engine must be running. From the project root:
 
 ```sh
-docker compose -f deploy/compose.yaml build
+docker compose -f deploy/compose.yaml pull
 docker compose -f deploy/compose.yaml run --rm meshway init --config /var/lib/meshway/config.json
 docker compose -f deploy/compose.yaml run --rm --entrypoint sh meshway
 ```
 
 Use the shell only to edit the persisted config with an available editor or copy it using Docker volume tooling, then start `docker compose -f deploy/compose.yaml up -d`. The image runs as a non-root user and persists identity/config in a named volume. The default container is not a TUN VPN and does not expose a browser-facing API/proxy. QUIC requires publishing UDP4001 as shown.
+
+The published `ghcr.io/user-github-me/meshway:0.1.0-alpha.1` image supports
+linux/amd64 and linux/arm64 and is anonymously downloadable. Use a digest from
+the release evidence for immutable deployments. To build from source instead,
+run `docker compose -f deploy/compose.yaml build` before starting. Do not expose
+the control API or SOCKS listener to the internet.
 
 If a compiler image cannot be downloaded, `deploy/Dockerfile.prebuilt` packages `dist/bin/meshway-linux-ARCH` into a trusted Alpine runtime. Build with `docker build -f deploy/Dockerfile.prebuilt --build-arg TARGETARCH=arm64 -t meshway:local .` (use `amd64` as appropriate). The local validation used an already cached Alpine-based image due Docker Hub timeouts, and verified non-root initialization plus actual Mac→Linux-container→public-HTTPS forwarding. A subsequent actual source compiler-image build succeeded with the official SDK archive and checksum-verified dependencies; encrypted public HTTPS through the resulting image also passed.
 

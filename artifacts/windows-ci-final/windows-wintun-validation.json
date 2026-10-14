@@ -1,0 +1,11 @@
+{
+  "encrypted_peer_packet_round_trip": "PASS",
+  "signed_wintun_driver": "PASS",
+  "platform": "Windows",
+  "actual_kernel_tcp_ipv6": "PASS",
+  "time": "2026-10-14T01:24:42.6264257Z",
+  "actual_kernel_tcp_ipv4": "PASS",
+  "full_device_firewall_crash_protection": "Separate native helper runtime gate",
+  "default_routes_unchanged": true,
+  "dns_unchanged": true
+}

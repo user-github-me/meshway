@@ -13,6 +13,18 @@ import time
 def tar(entries):
     output = io.BytesIO()
     with tarfile.open(fileobj=output, mode="w:gz") as archive:
+        directories=set()
+        for name,_,_ in entries:
+            parent=Path(name).parent
+            while str(parent)!='.':
+                directories.add(str(parent))
+                parent=parent.parent
+        for name in sorted(directories,key=lambda value:(value.count('/'),value)):
+            entry=tarfile.TarInfo(name+'/')
+            entry.type,entry.mode,entry.mtime=tarfile.DIRTYPE,0o755,0
+            entry.uid=entry.gid=0
+            entry.uname=entry.gname='root'
+            archive.addfile(entry)
         for name, content, mode in entries:
             entry = tarfile.TarInfo(name)
             entry.size, entry.mode, entry.mtime = len(content), mode, 0
@@ -45,7 +57,7 @@ def main():
     if not args.binary.read_bytes().startswith(b"\x7fELF"):
         parser.error("Expected a Linux ELF binary")
     root = Path(__file__).resolve().parents[1]
-    control = f"Package: meshway\nVersion: {args.version}\nSection: net\nPriority: optional\nArchitecture: {args.arch}\nMaintainer: Meshway contributors\nDepends: adduser, systemd, iproute2, nftables\nRecommends: systemd-resolved\nDescription: Encrypted peer VPN, SOCKS and tunnel daemon\n Internet exits require explicit operator consent and peer authorization.\n"
+    control = f"Package: meshway\nVersion: {args.version}\nSection: net\nPriority: optional\nArchitecture: {args.arch}\nMaintainer: Meshway contributors\nDepends: adduser, systemd, iproute2, nftables, util-linux\nRecommends: systemd-resolved\nDescription: Encrypted peer VPN, SOCKS and tunnel daemon\n Internet exits require explicit operator consent and peer authorization.\n"
     postinst = b'''#!/bin/sh
 set -eu
 if ! getent passwd meshway >/dev/null; then
@@ -68,7 +80,7 @@ fi
     package = ar([
         ("debian-binary", b"2.0\n"),
         ("control.tar.gz", tar([("control", control.encode(), 0o644), ("postinst", postinst, 0o755), ("prerm", prerm, 0o755)])),
-        ("data.tar.gz", tar([("usr/bin/meshway", args.binary.read_bytes(), 0o755), ("lib/systemd/system/meshway.service", service, 0o644), ("usr/share/doc/meshway/copyright", (root / "LICENSE").read_bytes(), 0o644)])),
+        ("data.tar.gz", tar([("usr/bin/meshway", args.binary.read_bytes(), 0o755), ("lib/systemd/system/meshway.service", service, 0o644), ("usr/share/doc/meshway/copyright", (root / "LICENSE").read_bytes(), 0o644)]+([("usr/share/doc/meshway/THIRD_PARTY_NOTICES.txt",(root/"THIRD_PARTY_NOTICES.txt").read_bytes(),0o644)] if (root/"THIRD_PARTY_NOTICES.txt").is_file() else []))),
     ])
     args.output.mkdir(parents=True, exist_ok=True)
     destination = args.output / f"meshway_{args.version}_{args.arch}.deb"

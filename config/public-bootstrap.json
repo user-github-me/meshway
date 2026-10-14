@@ -1,0 +1,12 @@
+{
+  "bootstrap_peers": [
+    "/ip4/20.239.207.178/tcp/4001/p2p/12D3KooWK7gSKUwyaHrvqRkwkcBbFSu97St6aLUzw2c7sJ6jHZ2t",
+    "/ip4/20.239.207.178/udp/4001/quic-v1/p2p/12D3KooWK7gSKUwyaHrvqRkwkcBbFSu97St6aLUzw2c7sJ6jHZ2t"
+  ],
+  "roles": {
+    "relay": true,
+    "exit": false
+  },
+  "label": "Meshway public encrypted relay",
+  "country": "HK"
+}

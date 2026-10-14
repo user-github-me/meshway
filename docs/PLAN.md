@@ -53,7 +53,7 @@ Configuration is JSON: identity/state directory; libp2p listen addresses; bootst
 ### 2 — IP VPN and embedding
 - [x] Linux TUN packet framing, validation, and bounded reads.
 - [x] Android external VPN file descriptor support.
-- [x] VPN route/setup documentation and explicit no-DNS/no-kill-switch limitations.
+- [x] IPv4/IPv6 internet egress, virtual tunneled DNS, native capture/failure controls, and documented platform bounds.
 - [x] Small mobile binding API and lifecycle support.
 - [x] Native Android client source and reproducible APK build scripts.
 - [x] Native Apple Network Extension and Windows Wintun/helper source, builds, DNS and failure controls; signed runtime validation remains platform evidence.
@@ -64,18 +64,19 @@ Configuration is JSON: identity/state directory; libp2p listen addresses; bootst
 - [x] Personal VPS mode uses same-account certificates without public allowlists.
 - [x] Public responsive website with truthful capability matrix and install guide.
 - [x] Local dashboard using live authenticated API.
-- [x] Native desktop lifecycle implementations and packaging; macOS runtime exercised, Windows runtime pending.
+- [x] Native desktop lifecycle implementations and packaging; macOS runtime, Windows daemon and signed Wintun IPv4/IPv6 kernel runtime exercised.
 - [x] Browser extension local proxy pairing, enable/disable, and cleanup.
 - [x] Website/dashboard production build and extension package verification.
 
 ### 4 — Distribution
 - [x] npm launcher/installer with checksum verification and supported-platform mapping.
-- [x] Multi-stage container source and validated Compose; prebuilt non-root runtime tested (standard registry download unavailable).
+- [x] Multi-stage container source and validated Compose; public multiarch GHCR image anonymously pulled and ARM64 executed.
 - [x] Linux systemd example and setup script (syntax checked; deployment untested).
 - [x] Cross-platform binary build and release archive script.
-- [x] CI authored; local tests/race/JS/cross compilation/audits pass; remote CI awaits publication.
+- [x] CI published; actual core/web/browser/macOS/Android/Windows checks and isolated Linux privileged helper checks pass.
 - [x] Signed publisher metadata, native signing/notarization scripts, verified artifact packaging and release/Pages automation for the authorized repository.
-- [ ] Record actual GitHub publication/CI and signed owner-native store releases separately.
+- [x] Record actual GitHub source/website/container publication and native/kernel CI evidence.
+- [ ] Legitimate owner-signed native/store releases and physical-device field gates.
 
 ### 5 — Harden and verify
 - [x] Test auth, origin restrictions, private target policy, stream limits, malformed SOCKS traffic, and shutdown.

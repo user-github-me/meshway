@@ -1,6 +1,6 @@
 # Verified status
 
-Meshway 0.1.0-alpha.1 is an experimental open-source implementation. Source published: https://github.com/user-github-me/meshway. Website live and actual browser-verified: https://user-github-me.github.io/meshway/. Verification performed on 2026-10-14. GitHub Pages deployment and core/web/macOS/Windows CI passed; browser/Android CI setup fixes are being verified. The temporary validation servers are not a permanent public volunteer network.
+Meshway 0.1.0-alpha.1 is an experimental open-source implementation. Source published: https://github.com/user-github-me/meshway. Website live and actual browser-verified: https://user-github-me.github.io/meshway/. Verification performed on 2026-10-14. Actual GitHub core/web/browser/macOS/Android/Windows checks passed, including real signed Wintun IPv4/IPv6 kernel TCP. Linux privileged VPN setup also passed in GitHub containers. Additional Apple packet-provider builds run separately. The earlier temporary validation servers were deleted; public relay operations are described in PUBLIC_NETWORK.md.
 
 ## Implemented and exercised
 
@@ -11,16 +11,16 @@ Meshway 0.1.0-alpha.1 is an experimental open-source implementation. Source publ
 | Personal servers | Distinct devices share recovery account, signed membership, private advertisements, wrong-account denial; revoked active UDP/packet sessions closed |
 | Accounts | Signed devices/history; authenticated encrypted optional sync; Keychain/Keystore/DPAPI storage integration; AES-GCM state migration/tampering tests; recovery import/rotation with restart journal; independent signed revocation propagation and signed history deletion |
 | Server catalog | Live list/map, owner-supplied country, authorized click/select; persistent invitations and selection; optional bounded bootstrap directory discovery with authenticated owner requery and private-server exclusion |
-| Linux internet VPN | Real kernel TUN → encrypted peer → gVisor userspace internet exit, IPv4/IPv6 TCP/UDP, kernel DNS, public TLS HTTPS; retained TUN blocks new TCP/DNS after stream loss |
+| Linux internet VPN | Real kernel TUN → encrypted peer → gVisor userspace internet exit, IPv4/IPv6 TCP/UDP, kernel DNS, public TLS HTTPS; retained TUN blocks new TCP/DNS after stream loss; root CLI sets routes/DNS/nft protection and restores exact original settings, including missing-config and failed-cleanup journal cases |
 | Android | Kotlin VpnService full IPv4/IPv6 capture and tunneled DNS; debug APK builds; real Android35 emulator private TUN/ICMP and account/file-picker tests; actual separate-UID internet VPN TCP, DNS, TLS1.3, lost-peer blocking, restart recovery and explicit-disconnect restoration passed ([evidence](../artifacts/android-ip-exit/result.json)) |
-| Apple | Swift macOS and iOS apps plus real Network Extension provider; unsigned debug/release Xcode builds; real Swift↔Go packet bridge UDP DNS; 14 Swift tests including real daemon contract and state migration |
-| Windows | WPF app, UAC helper, Wintun IPv4/IPv6 routes, NRPT DNS, owned firewall/journal rollback, DPAPI; x64/arm64 builds; 5,000 randomized helper CIDR test cases; actual Windows GitHub runner daemon authentication/shutdown passed; signed Wintun kernel test runs separately |
+| Apple | Swift macOS and iOS apps plus real Network Extension provider; unsigned debug/release Xcode builds; real Swift↔Go packet bridge UDP DNS; 15 Swift tests including real daemon contract, rejected destructive account actions and state migration |
+| Windows | WPF app, UAC helper, Wintun IPv4/IPv6 routes, NRPT DNS, owned firewall/journal rollback, DPAPI; x64/arm64 builds; 5,000 randomized helper CIDR test cases; actual Windows runner daemon authentication/shutdown and signed Wintun kernel IPv4/IPv6 TCP passed ([evidence](../artifacts/windows-ci-final/windows-wintun-validation.json)) |
 | Browser/web | Responsive real website/dashboard, live account/server list/map/personal selection; 5 actual Chromium integration tests; browser proxy enable/restoration in isolated profile |
 | External internet | Owner Mac → Azure exit → example.com TLS; forced circuit through separate Azure relay → same HTTPS; actual circuit-limited transport observed |
 | Restrictive NAT/recovery | Real separate Linux NAT namespaces reject direct inbound, relayed HTTPS, 80ms±20ms delay and 3% loss, outage detection and restart HTTPS; corresponding public Azure relay/loss/restart checks also pass |
-| Distribution | Six platform binaries; Debian/RPM packages; actual container source build with verified SDK/dependency checksums; full native bundle scripts; Ed25519 signed release metadata with independently bundled pin, rollback/equivocation/expiry/cache validation |
+| Distribution | Six platform binaries; Debian/RPM packages with actual disposable installation/removal checks; public anonymous multiarch GHCR container and actual ARM64 execution; full native bundle scripts; Ed25519 signed release metadata with independently bundled pin, rollback/equivocation/expiry/cache validation |
 
-Go vet and race tests pass across all packages. JavaScript has 20 passing unit tests and five browser integration tests. Swift has 14 passing tests. The native Windows helper has portable routing tests. Earlier packet parser fuzzing exercised 43,535 inputs. Security checks are development validation, not an independent audit.
+Go vet and race tests pass across all packages. JavaScript has 21 passing unit tests and five browser integration tests. Swift has 15 passing tests. The native Windows helper has portable routing tests. Earlier packet parser fuzzing exercised 43,535 inputs. Security checks are development validation, not an independent audit.
 
 External test details: [VALIDATION.md](VALIDATION.md), [cloud evidence](../artifacts/cloud-validation.json), [NAT evidence](../artifacts/nat-validation.json). Azure evidence includes binary SHA-256 and confirmed deletion of every temporary resource group. Host default routes, DNS, active VPN and system proxy were preserved.
 
@@ -47,7 +47,7 @@ python3 scripts/cloud-validation.py --provision
 
 ## External release requirements
 
-Actual signed Apple Network Extension operation requires the owner's Apple team/profiles. Authenticode/notarization/store signing requires legitimate owner credentials; automation is implemented but generated development credentials cannot replace them. Physical phones, cellular handover, prolonged sleep/wake/battery behavior, and Windows native VPN routing need their actual platform runtime results. Browser Firefox runtime needs a field run. These cannot be certified by compilation on this Mac.
+Actual signed Apple Network Extension operation requires the owner's Apple team/profiles. Authenticode/notarization/store signing requires legitimate owner credentials; automation is implemented but generated development credentials cannot replace them. Physical phones, cellular handover, prolonged sleep/wake/battery behavior, and Windows full-device helper crash/firewall behavior need their actual platform runtime results. Windows kernel packet I/O is verified separately. Browser Firefox runtime needs a field run. These cannot be certified by compilation on this Mac.
 
 Packet-loss containment while the core remains running is tested. Process-crash containment depends on platform lockdown/firewall configuration; platform bounds are documented in [VPN.md](VPN.md) and [DESKTOP_VPN.md](DESKTOP_VPN.md). IP egress supports TCP/UDP, not ICMP forwarding or fragmented/extended IP packets. Windows peer-IP exceptions permit other applications to those exact endpoint IPs. Universal NAT reachability, anonymity, and independently audited security are not claimed.
 

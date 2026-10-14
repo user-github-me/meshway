@@ -39,6 +39,7 @@ jobs:
       - run: go test -race ./... -count=1 -timeout=180s
       - run: npm test
       - run: npm run build
+      - run: python3 scripts/third-party-notices.py
       - name: Package cores and extensions
         env:
           RELEASE_TAG: ${{ inputs.tag }}

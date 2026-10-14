@@ -1,0 +1,54 @@
+{
+  "status": "PASS",
+  "time": "2026-10-14T01:35:38.959442+00:00",
+  "resource_group": "meshway-public-relay-20261014-012624",
+  "region": "eastasia",
+  "size": "Standard_B1s",
+  "public_ip": "20.239.207.178",
+  "peer_id": "12D3KooWK7gSKUwyaHrvqRkwkcBbFSu97St6aLUzw2c7sJ6jHZ2t",
+  "bootstrap_peers": [
+    "/ip4/20.239.207.178/tcp/4001/p2p/12D3KooWK7gSKUwyaHrvqRkwkcBbFSu97St6aLUzw2c7sJ6jHZ2t",
+    "/ip4/20.239.207.178/udp/4001/quic-v1/p2p/12D3KooWK7gSKUwyaHrvqRkwkcBbFSu97St6aLUzw2c7sJ6jHZ2t"
+  ],
+  "roles": {
+    "relay": true,
+    "exit": false
+  },
+  "persistent": true,
+  "binary_sha256": "1ed2bac4083376f2bef2c77bd3e8393dbb5bc8e1b59ee3d0b2c469467823c506",
+  "host_network_modified": false,
+  "tests": {
+    "encrypted_peer_connection": "PASS",
+    "circuit_v2_reservation": "PASS",
+    "quic": {
+      "encrypted_peer_connection": "PASS",
+      "circuit_v2_reservation": "PASS"
+    },
+    "restart_identity_persisted": "PASS",
+    "post_restart": {
+      "encrypted_peer_connection": "PASS",
+      "circuit_v2_reservation": "PASS"
+    },
+    "relayed_payload": {
+      "result": "PASS",
+      "payload_bytes": 32768,
+      "actual_circuit_limited": true,
+      "topology": "loopback client -> public Azure encrypted circuit relay -> separate loopback peer -> owned TCP echo"
+    },
+    "public_api_and_socks_disabled": "PASS"
+  },
+  "limits": {
+    "max_reservations": 128,
+    "max_circuits": 16,
+    "circuit_seconds": 120,
+    "circuit_bytes": 67108864
+  },
+  "cost": {
+    "currency": "USD",
+    "approximate_monthly_range": [
+      15,
+      25
+    ],
+    "note": "Compute, disk and public IPv4 incur ongoing charges; outgoing bandwidth is additional. Verify actual Azure billing/pricing."
+  }
+}

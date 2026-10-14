@@ -28,6 +28,12 @@ publisher keys, deployments and registry credentials. Public fork pull requests
 run without release credentials; CI does not use `pull_request_target` to run
 contributor code. A passing build is not an independent security audit.
 
+The sole repository administrator retains emergency bypass for maintenance and
+release recovery. Ordinary contributions must use pull requests and the checks
+above. The versioned policy is in `config/github-branch-protection.json`; the
+owner can reapply it with `scripts/configure-github.sh`. Release tags are
+protected against changes or deletion by non-administrators.
+
 Use the pull-request template, include user-visible compatibility changes and
 reproduction commands, and update relevant documentation. Maintainers prefer
 squash merges and delete merged branches. Commits should use a concise title

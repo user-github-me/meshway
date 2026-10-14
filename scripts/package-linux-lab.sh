@@ -11,6 +11,7 @@ cp "$project_dir/scripts/package-rpm.sh" "$work/scripts/"
 cp "$project_dir/deploy/meshway.spec" "$work/deploy/"
 cp "$project_dir/deploy/systemd/meshway.service" "$work/deploy/systemd/"
 cp "$project_dir/LICENSE" "$work/"
+cp "$project_dir/THIRD_PARTY_NOTICES.txt" "$work/"
 cp "$2" "$work/meshway"
 case "$4" in x86_64) platform=linux/amd64;; aarch64) platform=linux/arm64;; *) printf '%s\n' 'Unsupported RPM architecture.' >&2; exit 1;; esac
 # Signed Alpine packages supply the GNU tools rpmbuild needs; no host install.

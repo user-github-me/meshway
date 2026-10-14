@@ -18,7 +18,7 @@ def main():
     for platform,directory in [('macos','Release'),('ios','Release-iphoneos')]:
         app=Path('dist')/('apple-'+platform)/'Build/Products'/directory/'Meshway.app'
         if platform=='macos':
-            candidates.extend([app/'Contents/MacOS/Meshway',app/'Contents/PlugIns/MeshwayPacketTunnel.appex/Contents/MacOS/MeshwayPacketTunnel'])
+            candidates.extend([app/'Contents/MacOS/Meshway',app/'Contents/Resources/meshway',app/'Contents/PlugIns/MeshwayPacketTunnel.appex/Contents/MacOS/MeshwayPacketTunnel'])
         else:
             candidates.extend([app/'Meshway',app/'PlugIns/MeshwayPacketTunnel.appex/MeshwayPacketTunnel'])
     entries=[]

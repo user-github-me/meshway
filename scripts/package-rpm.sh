@@ -14,6 +14,7 @@ mkdir -p "$work/SOURCES" "$work/BUILD" "$work/BUILDROOT" "$work/RPMS" "$work/SRP
 cp "$1" "$work/SOURCES/meshway"
 cp "$project_dir/deploy/systemd/meshway.service" "$work/SOURCES/"
 cp "$project_dir/LICENSE" "$work/SOURCES/"
+cp "$project_dir/THIRD_PARTY_NOTICES.txt" "$work/SOURCES/"
 cp "$project_dir/deploy/meshway.spec" "$work/SPECS/"
 rpmbuild --target "$3" --define "_topdir $work" --define "meshway_version $2" --define "meshway_release $rpm_release" --define "meshway_arch $3" --define '_build_id_links none' -bb "$work/SPECS/meshway.spec"
 find "$work/RPMS" -name '*.rpm' -exec cp {} "$project_dir/release/" \;

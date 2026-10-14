@@ -1,0 +1,14 @@
+{
+  "format": "deb",
+  "image": "postgres:18-bookworm",
+  "package": "meshway_0.1.0-alpha.1_arm64.deb",
+  "version": "0.1.0-alpha.1",
+  "checked_at": "2026-10-14T01:29:22.405179+00:00",
+  "status": "PASS",
+  "native_version": true,
+  "private_state_permissions": true,
+  "vpn_dependencies": true,
+  "no_automatic_service_start": true,
+  "removal_preserves_account": true,
+  "owned_container_removed": true
+}
