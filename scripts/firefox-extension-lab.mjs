@@ -26,12 +26,17 @@ const servers = [];
 const profiles = [];
 let context;
 let rdp;
+let launchedBrowsers = 0;
+let closedBrowsers = 0;
 const started = new Date().toISOString();
 const evidence = {
   schema: 1, started_at: started, status: 'running',
   platform: { os: process.platform, arch: process.arch, node: process.version },
   source_commit: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repository, encoding: 'utf8' }).trim(),
-  browser: { executable_sha256: sha256(readFileSync(executable)) },
+  browser: {
+    executable_sha256: sha256(readFileSync(executable)),
+    playwright_version: JSON.parse(readFileSync(join(repository, 'node_modules/playwright/package.json'), 'utf8')).version,
+  },
   extension: { id: addonId, version: manifest.version, files_sha256: {} },
   method: 'Real headless Firefox; native RDP temporary addon and popup DOM; actual browser proxy API and loopback TCP traffic.',
   bounds: [
@@ -41,6 +46,8 @@ const evidence = {
     'Firefox signing/store installation, physical field use, device routes, system DNS and system proxy are outside this test.',
   ],
 };
+const geckoLibrary = ['XUL', 'libxul.so', 'xul.dll'].map(file => join(dirname(executable), file)).find(existsSync);
+if (geckoLibrary) evidence.browser.gecko_library_sha256 = sha256(readFileSync(geckoLibrary));
 for (const file of readdirSync(extension).sort()) {
   evidence.extension.files_sha256[file] = sha256(readFileSync(join(extension, file)));
 }
@@ -171,7 +178,7 @@ function socksFixture(label, originPort, requests) {
 
 const popupState = `
   const deadline=Date.now()+10000;
-  while(document.getElementById('toggle').disabled){
+  while(!document.getElementById('toggle') || document.getElementById('toggle').disabled){
     if(Date.now()>deadline)throw new Error('Popup initialization/mutation timed out.');
     await new Promise(resolve=>setTimeout(resolve,25));
   }
@@ -203,6 +210,7 @@ async function startBrowser(originalPort, grantPrivatePermission) {
       'network.http.speculative-parallel-limit': 0,
     },
   });
+  launchedBrowsers++;
   rdp = new FirefoxRDP(debugPort);
   await rdp.next(packet => packet.applicationType === 'browser');
   const root = await rdp.request({ to: 'root', type: 'getRoot' });
@@ -232,18 +240,31 @@ async function startBrowser(originalPort, grantPrivatePermission) {
 
 async function closeBrowser() {
   rdp?.close(); rdp = undefined;
-  if (context) { const ownedContext = context; context = undefined; await ownedContext.close(); }
-  for (const profile of profiles) rmSync(profile, { recursive: true, force: true });
+  try {
+    if (context) {
+      await context.close();
+      context = undefined;
+      closedBrowsers++;
+    }
+  } finally {
+    for (const profile of profiles) rmSync(profile, { recursive: true, force: true });
+  }
 }
 async function cleanup() {
-  await closeBrowser();
-  for (const socket of sockets) socket.destroy();
-  await Promise.all(servers.filter(server => server.listening).map(server => new Promise(fulfill => server.close(fulfill))));
+  let browserError;
+  try { await closeBrowser(); }
+  catch (error) { browserError = error; }
+  finally {
+    for (const socket of sockets) socket.destroy();
+    await Promise.all(servers.filter(server => server.listening).map(server => new Promise(fulfill => server.close(fulfill))));
+  }
   evidence.cleanup = {
-    browser_closed: !context, profiles_deleted: profiles.every(profile => !existsSync(profile)),
+    browser_closed: closedBrowsers === launchedBrowsers, browser_instances_closed: closedBrowsers,
+    profiles_deleted: profiles.every(profile => !existsSync(profile)),
     loopback_listeners_stopped: servers.every(server => !server.listening),
     host_routes_dns_system_proxy_changes: false,
   };
+  if (browserError) throw browserError;
 }
 process.once('SIGINT', () => { cleanup().finally(() => process.exit(130)); });
 process.once('SIGTERM', () => { cleanup().finally(() => process.exit(143)); });
@@ -274,7 +295,8 @@ try {
   await closeBrowser();
 
   const granted = await startBrowser(originalPort, true);
-  evidence.browser.version = await rdp.evaluate(granted.popup.consoleActor, 'return navigator.userAgent;');
+  Object.assign(evidence.browser, JSON.parse(await rdp.evaluate(granted.popup.consoleActor, 'return JSON.stringify(await browser.runtime.getBrowserInfo());')));
+  evidence.browser.user_agent = await rdp.evaluate(granted.popup.consoleActor, 'return navigator.userAgent;');
   evidence.extension.temporary_install = true;
   evidence.extension.firefox_warnings = granted.addon.warnings;
   evidence.private_permission_granted = granted.privateAllowed;
@@ -298,6 +320,9 @@ try {
   const backgroundDenial = JSON.parse(await rdp.evaluate(granted.popup.consoleActor, `return JSON.stringify(await browser.runtime.sendMessage({type:'enable',host:'127.0.0.1',port:${JSON.stringify(String(meshwayPort))},consent:false}));`));
   assert.equal(backgroundDenial.ok, false);
   assert.match(backgroundDenial.error, /Explicit consent/);
+  const backgroundDeniedState = await granted.state();
+  assert.deepEqual(backgroundDeniedState.proxy, before.proxy);
+  assert.equal(backgroundDeniedState.recovery_present, false);
   evidence.consent = { popup_rejected: true, background_rejected: true, settings_unchanged: true };
 
   await rdp.evaluate(granted.popup.consoleActor, `document.getElementById('consent').click(); document.getElementById('port').value=${JSON.stringify(String(meshwayPort))}; document.getElementById('toggle').click(); return 'clicked';`);

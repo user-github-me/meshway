@@ -31,9 +31,13 @@ import (
 )
 
 func windowsLabPowerShell(script string) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	return exec.CommandContext(ctx, "powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "$ErrorActionPreference='Stop'; "+script).CombinedOutput()
+	output, err := exec.CommandContext(ctx, "powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "$ErrorActionPreference='Stop'; "+script).CombinedOutput()
+	if ctx.Err() != nil {
+		err = fmt.Errorf("Windows lab PowerShell command exceeded its 60-second limit: %w", ctx.Err())
+	}
+	return output, err
 }
 
 // Opt-in test for a DISPOSABLE administrator Windows runner with the pinned,

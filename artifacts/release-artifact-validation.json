@@ -1,0 +1,21 @@
+{
+  "status": "PASS",
+  "version": "0.1.0-alpha.1",
+  "source_commit": "610506b20d4d9317ef7dea11acae7bb3f011b54e",
+  "checked_at": "2026-10-14T03:09:44.249819+00:00",
+  "checks": {
+    "meshway-linux-amd64.tar.gz": "PASS",
+    "meshway-darwin-arm64.tar.gz": "PASS",
+    "meshway-darwin-amd64.tar.gz": "PASS",
+    "meshway-linux-arm64.tar.gz": "PASS",
+    "Meshway-win-x64.zip": "PASS",
+    "Meshway-win-arm64.zip": "PASS",
+    "Meshway-ios-unsigned.ipa": "PASS",
+    "Mac_universal_GUI_provider_daemon": "PASS",
+    "Meshway-macos.zip": "PASS",
+    "native_manifest_18_current_executables": "PASS",
+    "Meshway-extension-chrome.zip": "PASS",
+    "Meshway-extension-firefox.zip": "PASS"
+  },
+  "scope": "Archive contents and native architecture/manifest; publisher signature generated only after final CI and container export."
+}

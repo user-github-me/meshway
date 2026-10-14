@@ -99,10 +99,12 @@ jobs:
       - run: dotnet build apps/windows/Meshway/Meshway.csproj -c Release
       - run: go build -o dist/meshway-windows-amd64.exe ./cmd/meshway
       - run: python apps/windows/prepare-wintun.py --arch amd64 --output dist/wintun/amd64/wintun.dll
-      - run: ./apps/windows/build.ps1 -Runtime win-x64 -Daemon dist/meshway-windows-amd64.exe -Wintun dist/wintun/amd64/wintun.dll
+      - id: package
+        run: ./apps/windows/build.ps1 -Runtime win-x64 -Daemon dist/meshway-windows-amd64.exe -Wintun dist/wintun/amd64/wintun.dll
       - run: ./scripts/validate-windows.ps1 -Daemon dist/Meshway-win-x64/meshway-daemon.exe
       - run: ./scripts/windows-tun-lab.ps1 -Package dist/Meshway-win-x64
-      - run: ./scripts/windows-firewall-lab.ps1 -Package dist/Meshway-win-x64
+      - if: ${{ !cancelled() && steps.package.outcome == 'success' }}
+        run: ./scripts/windows-firewall-lab.ps1 -Package dist/Meshway-win-x64
       - uses: actions/upload-artifact@v4
         if: always()
         with:

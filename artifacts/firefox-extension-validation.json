@@ -1,16 +1,22 @@
 {
   "schema": 1,
-  "started_at": "2026-10-14T02:58:46.432Z",
+  "started_at": "2026-10-14T03:03:09.210Z",
   "status": "passed",
   "platform": {
     "os": "darwin",
     "arch": "arm64",
     "node": "v24.20.0"
   },
-  "source_commit": "266d6342dcf691c46c205b36a2c75ea52eefff75",
+  "source_commit": "610506b20d4d9317ef7dea11acae7bb3f011b54e",
   "browser": {
     "executable_sha256": "e75d92f6f3210c9c31056d10b912f43c139f0cf7a2a3d0f2e002e88c1c7fbf5a",
-    "version": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0"
+    "playwright_version": "1.64.0",
+    "gecko_library_sha256": "36406f2b2c1f41884a56a623cfc209bc71f2af1a98a22728310dbf54ad717f78",
+    "name": "Firefox",
+    "vendor": "Mozilla",
+    "version": "155.0",
+    "buildID": "20260902192324",
+    "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:155.0) Gecko/20100101 Firefox/155.0"
   },
   "extension": {
     "id": "meshway-local-proxy@meshway.local",
@@ -61,7 +67,7 @@
         "passthrough": "localhost, 127.0.0.1, ::1, preserved.invalid",
         "http": "",
         "ssl": "",
-        "socks": "127.0.0.1:55228"
+        "socks": "127.0.0.1:55450"
       }
     },
     "enabled": {
@@ -76,7 +82,7 @@
         "passthrough": "localhost, 127.0.0.1, ::1",
         "http": "",
         "ssl": "",
-        "socks": "127.0.0.1:55229"
+        "socks": "127.0.0.1:55451"
       }
     },
     "after": {
@@ -91,7 +97,7 @@
         "passthrough": "localhost, 127.0.0.1, ::1, preserved.invalid",
         "http": "",
         "ssl": "",
-        "socks": "127.0.0.1:55228"
+        "socks": "127.0.0.1:55450"
       }
     },
     "exact_restoration": true,
@@ -135,7 +141,7 @@
       },
       {
         "path": "/bypass",
-        "host": "127.0.0.1:55227"
+        "host": "127.0.0.1:55449"
       },
       {
         "path": "/after",
@@ -148,9 +154,10 @@
   },
   "cleanup": {
     "browser_closed": true,
+    "browser_instances_closed": 2,
     "profiles_deleted": true,
     "loopback_listeners_stopped": true,
     "host_routes_dns_system_proxy_changes": false
   },
-  "finished_at": "2026-10-14T02:58:49.473Z"
+  "finished_at": "2026-10-14T03:03:12.792Z"
 }
