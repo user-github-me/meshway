@@ -25,6 +25,8 @@ class MeshwayService : VpnService() {
         const val SELECT = "network.meshway.SELECT"
         const val ACCOUNT = "network.meshway.ACCOUNT"
         const val SYNC = "network.meshway.SYNC"
+        const val REVOKE = "network.meshway.REVOKE"
+        const val CLEAR_HISTORY = "network.meshway.CLEAR_HISTORY"
         const val DISCONNECT = "network.meshway.DISCONNECT"
         private const val CHANNEL = "meshway-node"
         private const val NOTIFICATION = 1
@@ -80,6 +82,14 @@ class MeshwayService : VpnService() {
             SYNC -> worker.execute {
                 try { requireNotNull(node).syncAccount(intent.getStringExtra("peer") ?: ""); refreshAccount(); NodeState.update(NodeState.snapshot.copy(message = "Account synchronized with the chosen device.")) }
                 catch (error: Exception) { NodeState.update(NodeState.snapshot.copy(message = "Sync failed: ${error.message}")) }
+            }
+            REVOKE -> worker.execute {
+                try { requireNotNull(node).revokeDevice(intent.getStringExtra("peer") ?: ""); refreshAccount(); NodeState.update(NodeState.snapshot.copy(message = "Device revoked. Trusted devices receive the signed revocation on their next sync.")) }
+                catch (error: Exception) { NodeState.update(NodeState.snapshot.copy(message = "Revocation failed: ${error.message}")) }
+            }
+            CLEAR_HISTORY -> worker.execute {
+                try { requireNotNull(node).clearHistory(intent.getBooleanExtra("synchronize", true)); refreshAccount(); NodeState.update(NodeState.snapshot.copy(message = "Connection history deleted.")) }
+                catch (error: Exception) { NodeState.update(NodeState.snapshot.copy(message = "History deletion failed: ${error.message}")) }
             }
             DISCONNECT -> worker.execute {
                 if (internetPeer.isNotEmpty()) {

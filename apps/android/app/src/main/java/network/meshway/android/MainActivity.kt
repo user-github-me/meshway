@@ -105,6 +105,30 @@ class MainActivity : Activity() {
             } else choose(false)
         }
         text("Anyone with your recovery file can enroll devices in your account. Save it privately. Import joins an existing account while keeping this device's separate network identity.")
+        button("Replace recovery key…") {
+            if (NodeState.snapshot.running || NodeState.snapshot.busy) { toast("Stop Meshway and its VPN first."); return@button }
+            android.app.AlertDialog.Builder(this).setTitle("Replace your recovery key?")
+                .setMessage("This creates a new account ID and clears local device/history records. Save the new backup, then import it on every trusted device and personal server before reconnecting. The old key still controls the old account.")
+                .setNegativeButton("Cancel", null).setPositiveButton("Choose new backup") { _, _ ->
+                    startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("application/json").putExtra(Intent.EXTRA_TITLE, "meshway-new-recovery.json"), 202)
+                }.show()
+        }
+        val revokePeer = field("Device peer ID to revoke", "")
+        button("Revoke device…") {
+            if (!NodeState.snapshot.running) { toast("Start Meshway first."); return@button }
+            val selected = revokePeer.text.toString().trim()
+            if (selected.isEmpty()) { toast("Enter the device peer ID first."); return@button }
+            android.app.AlertDialog.Builder(this).setTitle("Revoke this device?")
+                .setMessage("The signed revocation reaches trusted devices when they synchronize. Rotate your account if its recovery key is compromised.")
+                .setNegativeButton("Cancel", null).setPositiveButton("Revoke") { _, _ -> startService(Intent(this, MeshwayService::class.java).setAction(MeshwayService.REVOKE).putExtra("peer", selected)) }.show()
+        }
+        val synchronizeDeletion = android.widget.CheckBox(this).apply { text = "Apply history deletion to synced devices"; isChecked = true; content.addView(this) }
+        button("Delete connection history…") {
+            if (!NodeState.snapshot.running) { toast("Start Meshway first."); return@button }
+            android.app.AlertDialog.Builder(this).setTitle("Delete connection history?")
+                .setMessage(if (synchronizeDeletion.isChecked) "Create a signed history deletion that other devices apply on their next account sync?" else "Delete history only on this device? Other devices retain their copies.")
+                .setNegativeButton("Cancel", null).setPositiveButton("Delete") { _, _ -> startService(Intent(this, MeshwayService::class.java).setAction(MeshwayService.CLEAR_HISTORY).putExtra("synchronize", synchronizeDeletion.isChecked)) }.show()
+        }
         button("Advanced settings") { advanced.visibility = if (advanced.visibility == View.GONE) View.VISIBLE else View.GONE }
         val advancedStart = content.childCount
         text("Optional private IP tunnel", 19f)
@@ -208,7 +232,7 @@ class MainActivity : Activity() {
             if (resultCode == RESULT_OK && server != null) selectServer(server)
             else toast("VPN permission was not granted.")
         }
-        if (requestCode in 200..201 && resultCode == RESULT_OK && data?.data != null) {
+        if (requestCode in 200..202 && resultCode == RESULT_OK && data?.data != null) {
             val uri = data.data!!
             val replace = replaceRecovery
             background.execute {
@@ -224,6 +248,19 @@ class MainActivity : Activity() {
                             Meshway.startSecure(json.toString(), storageKey).stop()
                             Meshway.exportRecoverySecure(stateDirectory, temporary.path, storageKey)
                             contentResolver.openOutputStream(uri, "wt")?.use { output -> temporary.inputStream().use { it.copyTo(output) } } ?: error("Could not open chosen file")
+                        } else if (requestCode == 202) {
+                            // Stage the new backup without changing this account.
+                            // Commit only after Android's selected document was
+                            // successfully written, so cancellation/I/O failures
+                            // cannot rotate away the user's usable recovery key.
+                            val staging = File(filesDir, "rotation-stage-${System.nanoTime()}")
+                            try {
+                                staging.mkdirs(); android.system.Os.chmod(staging.path, 0x1C0)
+                                val key = StateVault.key(this)
+                                Meshway.rotateRecoverySecure(staging.path, temporary.path, key)
+                                contentResolver.openOutputStream(uri, "wt")?.use { output -> temporary.inputStream().use { it.copyTo(output) }; output.flush() } ?: error("Could not save the new recovery backup")
+                                Meshway.importRecoverySecure(stateDirectory, temporary.path, true, key)
+                            } finally { staging.deleteRecursively() }
                         } else {
                             contentResolver.openInputStream(uri)?.use { input ->
                                 val bytes = input.readNBytes(8193)
@@ -234,7 +271,7 @@ class MainActivity : Activity() {
                             Meshway.importRecoverySecure(stateDirectory, temporary.path, replace, StateVault.key(this))
                         }
                     } finally { temporary.delete() }
-                    runOnUiThread { toast(if (requestCode == 200) "Recovery key saved. Keep it private." else "Account imported. Start Meshway to enroll this device.") }
+                    runOnUiThread { toast(if (requestCode == 200) "Recovery key saved. Keep it private." else if (requestCode == 202) "New recovery key saved. Import it on every trusted device and private server; your account ID changed." else "Account imported. Start Meshway to enroll this device.") }
                 } catch (error: Exception) { runOnUiThread { toast(error.message ?: "Recovery transfer failed") } }
             }
         }

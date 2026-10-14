@@ -44,6 +44,8 @@ final class AppModel: ObservableObject {
     @Published var allowedPeersText = ""
     @Published var accountText = "Start the daemon, then refresh your local account and device list."
     @Published var accountSyncPeer = ""
+    @Published var revokedPeer = ""
+    @Published var syncHistoryDeletion = true
     @Published var servers: [Server] = []
     @Published var catalogMessage = "Start Meshway to see available servers."
     @Published var deviceVPN = true
@@ -123,7 +125,7 @@ final class AppModel: ObservableObject {
 
     private func runAccountCommand(_ command: String, file: URL, replaceAccount: Bool = false) async throws {
         try save()
-        guard process == nil, status == nil else { throw ClientError.invalidConfiguration("Stop the daemon before exporting or importing your recovery key.") }
+        guard process == nil, status == nil, ![.connected, .connecting, .reasserting].contains(vpn.status) else { throw ClientError.invalidConfiguration("Stop the daemon before exporting or importing your recovery key.") }
         guard FileManager.default.isExecutableFile(atPath: executablePath) else { throw ClientError.invalidConfiguration("Choose the Meshway daemon executable in advanced settings first.") }
         let executable = executablePath
         let config = configURL.path
@@ -143,7 +145,7 @@ final class AppModel: ObservableObject {
                 guard child.terminationStatus == 0 else { throw ClientError.invalidConfiguration(String(decoding: output.prefix(2048), as: UTF8.self)) }
             }
             if command == "export" { try run(["account", "create", "--config", config]) }
-            var arguments = ["account", command, "--config", config, command == "export" ? "--output" : "--input", file.path]
+            var arguments = ["account", command, "--config", config, (command == "export" || command == "rotate") ? "--output" : "--input", file.path]
             if replaceAccount { arguments.append("--force") }
             try run(arguments)
         }.value
@@ -158,6 +160,42 @@ final class AppModel: ObservableObject {
         busy = true
         defer { busy = false }
         do { try await runAccountCommand("export", file: file); error = nil; message = "Recovery key saved to your chosen private file." }
+        catch { self.error = error.localizedDescription }
+    }
+
+    func rotateRecovery() async {
+        let alert = NSAlert()
+        alert.messageText = "Replace your account recovery key?"
+        alert.informativeText = "Stop Meshway and its device VPN first. This creates a new account ID and clears local device/history records. Save the new recovery backup, then import it on every trusted device and personal server before reconnecting. The old key still controls the old account."
+        alert.addButton(withTitle: "Choose new private backup…"); alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let panel = NSSavePanel(); panel.title = "Save your new Meshway recovery key"; panel.nameFieldStringValue = "meshway-new-recovery.json"
+        guard panel.runModal() == .OK, let file = panel.url else { return }
+        busy = true; defer { busy = false }
+        do {
+            try await runAccountCommand("rotate", file: file)
+            accountText = "New account created. Import this new backup on your other devices and personal servers."
+            message = "New recovery key saved. Your account ID has changed."; error = nil
+        } catch { self.error = error.localizedDescription }
+    }
+
+    func revokeDevice() async {
+        let peer = revokedPeer.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !peer.isEmpty else { return }
+        let alert = NSAlert(); alert.messageText = "Revoke this account device?"
+        alert.informativeText = "The signed device revocation will propagate when trusted devices synchronize. A stolen recovery key can still enroll new devices; rotate the account if that key is compromised."
+        alert.addButton(withTitle: "Revoke device"); alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        do { try await DaemonAPI(configuration: configuration).revokeDevice(peerID: peer); await refreshAccount(); message = "Device revoked on this account." }
+        catch { self.error = error.localizedDescription }
+    }
+
+    func clearHistory() async {
+        let alert = NSAlert(); alert.messageText = "Delete connection history?"
+        alert.informativeText = syncHistoryDeletion ? "This creates a signed deletion record. Trusted devices apply it on their next account sync. Device membership remains available." : "Only history stored on this device will be deleted. Other devices retain their copies."
+        alert.addButton(withTitle: "Delete history"); alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        do { try await DaemonAPI(configuration: configuration).clearHistory(synchronize: syncHistoryDeletion); await refreshAccount(); message = "History deleted." }
         catch { self.error = error.localizedDescription }
     }
 
@@ -455,7 +493,12 @@ struct ContentView: View {
                             HStack {
                                 Button("Save recovery key…") { Task { await model.exportRecovery() } }
                                 Button("Import recovery key…") { Task { await model.importRecovery() } }
+                                Button("Replace recovery key…") { Task { await model.rotateRecovery() } }
                             }.disabled(model.status != nil || model.runningOwnedProcess || model.busy)
+                            TextField("Device peer ID to revoke", text: $model.revokedPeer)
+                            Button("Revoke device…") { Task { await model.revokeDevice() } }.disabled(model.status == nil || model.busy || model.revokedPeer.isEmpty)
+                            Toggle("Apply history deletion to synced devices", isOn: $model.syncHistoryDeletion)
+                            Button("Delete connection history…") { Task { await model.clearHistory() } }.disabled(model.status == nil || model.busy)
                             Text("Stop Meshway before saving or importing a recovery key. Anyone with your key can enroll devices in your account; keep the backup private.").font(.caption).foregroundStyle(.secondary)
                         }.padding(8)
                     }

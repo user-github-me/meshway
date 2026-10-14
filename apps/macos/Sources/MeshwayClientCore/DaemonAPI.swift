@@ -92,6 +92,16 @@ public struct DaemonAPI: Sendable {
         _ = try await request(path: "v1/account/sync", method: "POST", body: body)
     }
 
+    public func revokeDevice(peerID: String) async throws {
+        let body = try JSONSerialization.data(withJSONObject: ["peer_id": peerID])
+        _ = try await request(path: "v1/account/revoke", method: "POST", body: body)
+    }
+
+    public func clearHistory(synchronize: Bool) async throws {
+        let body = try JSONSerialization.data(withJSONObject: ["synchronize": synchronize])
+        _ = try await request(path: "v1/account/history", method: "DELETE", body: body)
+    }
+
     private func request(path: String, method: String = "GET", body: Data? = nil) async throws -> Data {
         var request = URLRequest(url: baseURL.appendingPathComponent(path))
         request.httpMethod = method

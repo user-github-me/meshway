@@ -15,8 +15,12 @@ node packages/cli/bin/meshway.js daemon --config .meshway/config.json
 After publishing a release containing raw platform binaries, `RELEASE.json`, and its detached Ed25519 `RELEASE.json.sig`:
 
 ```sh
-meshway install-core --release-base https://github.com/YOUR-ORG/YOUR-REPO/releases/download/v0.1.0/ --public-key /path/to/publisher-public.pem --version 0.1.0
+npm install -g https://github.com/user-github-me/meshway/releases/download/v0.1.0-alpha.1/meshway-cli-0.1.0.tgz
+meshway install-core
+meshway version
 ```
+
+`install-core` uses the signed project's `0.1.0-alpha.1` release and its public-key pin by default. For a fork, pass `--release-base HTTPS_URL --public-key /path/to/independently-verified.pem --version VERSION`. Downloads happen only when you explicitly run the install command. Running a missing core gives a clear installation instruction and does not start a network download.
 
 The package ships the project publisher pin in `release-public.pem`. Acquire and confirm a custom fork's public key independently of its release download before using `--public-key`. The installer requires its pinned key, HTTPS, a valid Ed25519 signature, unexpired metadata, and a matching SHA-256 before installing. Reusing the cache rejects lower release sequences, conflicting metadata at one sequence, and publisher key changes. Run the same command for an update; it never replaces a running daemon. Stop the app, install, and restart. Cached launches reverify the signature and bytes while allowing installed metadata to expire for offline use.
 

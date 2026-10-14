@@ -72,9 +72,9 @@ public partial class MainWindow : Window
         File.WriteAllText(Path.Combine(Path.GetDirectoryName(configPath)!, "executable.txt"), ExecutablePath.Text.Trim());
     }
 
-    private async Task<JsonNode?> Request(string route, string? json = null)
+    private async Task<JsonNode?> Request(string route, string? json = null, HttpMethod? method = null)
     {
-        using var request = new HttpRequestMessage(json == null ? HttpMethod.Get : HttpMethod.Post, new Uri(config.ApiUri(), route));
+        using var request = new HttpRequestMessage(method ?? (json == null ? HttpMethod.Get : HttpMethod.Post), new Uri(config.ApiUri(), route));
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", config.String("api_token"));
         if (json != null) request.Content = new StringContent(json, Encoding.UTF8, "application/json");
         using var response = await client.SendAsync(request);
@@ -234,7 +234,7 @@ public partial class MainWindow : Window
     private void SaveClicked(object sender, RoutedEventArgs e) { try { Save(); MessageText.Text = "Settings saved. They apply on next start."; } catch (Exception error) { MessageText.Text = error.Message; } }
     private async Task RunAccountFileCommand(string command, string file, bool replaceAccount = false)
     {
-        if (live || ownedProcess != null || busy) throw new InvalidDataException("Stop Meshway before exporting or importing your recovery key.");
+        if (live || ownedProcess != null || busy || deviceVPN.Running) throw new InvalidDataException("Stop Meshway before exporting or importing your recovery key.");
         Save();
         var executable = ExecutablePath.Text.Trim();
         if (!File.Exists(executable)) throw new FileNotFoundException("Choose the daemon executable first.");
@@ -246,7 +246,7 @@ public partial class MainWindow : Window
                 var info = new ProcessStartInfo(executable) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardError = true, RedirectStandardOutput = true };
                 info.Environment["MESHWAY_STATE_KEY"] = Convert.ToBase64String(StateKey.LoadOrCreate(configPath));
                 info.ArgumentList.Add("account"); info.ArgumentList.Add(action); info.ArgumentList.Add("--config"); info.ArgumentList.Add(configPath);
-                if (withFile) { info.ArgumentList.Add(action == "export" ? "--output" : "--input"); info.ArgumentList.Add(file); }
+                if (withFile) { info.ArgumentList.Add((action == "export" || action == "rotate") ? "--output" : "--input"); info.ArgumentList.Add(file); }
                 if (withFile && replaceAccount) info.ArgumentList.Add("--force");
                 using var child = Process.Start(info) ?? throw new IOException("Could not start account operation.");
                 var stdout = child.StandardOutput.ReadToEndAsync(); var stderr = child.StandardError.ReadToEndAsync();
@@ -264,6 +264,29 @@ public partial class MainWindow : Window
         var dialog = new SaveFileDialog { Title = "Save your private Meshway recovery key", FileName = "meshway-recovery.json", Filter = "Recovery file|*.json", OverwritePrompt = true };
         if (dialog.ShowDialog() != true) return;
         try { await RunAccountFileCommand("export", dialog.FileName); MessageText.Text = "Recovery key saved. Keep this file private."; }
+        catch (Exception error) { MessageText.Text = error.Message; }
+    }
+    private async void RotateRecoveryClicked(object sender, RoutedEventArgs e)
+    {
+        if (MessageBox.Show("Stop Meshway and its VPN first. Replacing the recovery key creates a new account ID and clears local device/history records. Import the new backup on every trusted device and personal server before reconnecting. The old key still controls the old account.", "Replace recovery key?", MessageBoxButton.OKCancel, MessageBoxImage.Warning) != MessageBoxResult.OK) return;
+        var dialog = new SaveFileDialog { Title = "Save your new private recovery key", FileName = "meshway-new-recovery.json", Filter = "Recovery file|*.json", OverwritePrompt = true };
+        if (dialog.ShowDialog() != true) return;
+        try { await RunAccountFileCommand("rotate", dialog.FileName); AccountText.Text = "New account created. Import this backup on trusted devices and private servers."; MessageText.Text = "Recovery key replaced. Your account ID changed."; }
+        catch (Exception error) { MessageText.Text = error.Message; }
+    }
+    private async void RevokeDeviceClicked(object sender, RoutedEventArgs e)
+    {
+        var peer = RevokePeer.Text.Trim();
+        if (peer.Length == 0) { MessageText.Text = "Enter the device peer ID first."; return; }
+        if (MessageBox.Show("Revoke this device? The signed revocation reaches other devices when they synchronize. Rotate the account if the recovery key is compromised.", "Revoke account device?", MessageBoxButton.OKCancel, MessageBoxImage.Warning) != MessageBoxResult.OK) return;
+        try { await Request("v1/account/revoke", JsonSerializer.Serialize(new { peer_id = peer })); await RefreshAccount(); MessageText.Text = "Device revoked."; }
+        catch (Exception error) { MessageText.Text = error.Message; }
+    }
+    private async void ClearHistoryClicked(object sender, RoutedEventArgs e)
+    {
+        var synchronize = SyncHistoryDeletion.IsChecked == true;
+        if (MessageBox.Show(synchronize ? "Delete connection history and create a signed deletion for other devices to apply on their next sync?" : "Delete history on only this device? Other devices retain their records.", "Delete history?", MessageBoxButton.OKCancel, MessageBoxImage.Warning) != MessageBoxResult.OK) return;
+        try { await Request("v1/account/history", JsonSerializer.Serialize(new { synchronize }), HttpMethod.Delete); await RefreshAccount(); MessageText.Text = "History deleted."; }
         catch (Exception error) { MessageText.Text = error.Message; }
     }
     private async void ImportRecoveryClicked(object sender, RoutedEventArgs e)

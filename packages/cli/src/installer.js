@@ -5,6 +5,9 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { publicKey, verifyRelease } from './release.js';
 
+export const projectReleaseVersion = '0.1.0-alpha.1';
+export const projectReleaseBase = `https://github.com/user-github-me/meshway/releases/download/v${projectReleaseVersion}/`;
+
 export function binaryName(platform = process.platform, arch = process.arch) {
   const operatingSystem = { darwin: 'darwin', linux: 'linux', win32: 'windows' }[platform];
   const architecture = { x64: 'amd64', arm64: 'arm64' }[arch];
@@ -59,7 +62,7 @@ async function download(url, limit, fetchImpl) {
   throw new Error('Too many release redirects.');
 }
 
-export async function installCore({ base, publisherKey, expectedVersion, directory = cacheDirectory(), platform, arch, fetchImpl = fetch }) {
+export async function installCore({ base = projectReleaseBase, publisherKey, expectedVersion = base === projectReleaseBase ? projectReleaseVersion : undefined, directory = cacheDirectory(), platform, arch, fetchImpl = fetch } = {}) {
   const name = binaryName(platform, arch);
   const release = releaseURL(base);
   publisherKey ||= await readFile(new URL('../release-public.pem', import.meta.url), 'utf8');
@@ -126,5 +129,5 @@ export async function resolveCore() {
   if (await exists(cached)) {
     return verifyCachedCore(cached, name);
   }
-  throw new Error('Meshway core is not installed. In the source checkout run ./scripts/build.sh, or run meshway install-core --release-base https://YOUR-RELEASE-DIRECTORY/ --public-key /path/to/publisher-public.pem.');
+  throw new Error('Meshway core is not installed. Run meshway install-core to install the signed project release, or build it locally with ./scripts/build.sh.');
 }

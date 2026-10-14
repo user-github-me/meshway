@@ -12,6 +12,13 @@ final class IOSModel: ObservableObject {
     @Published var importRecovery = false
     @Published var exportRecovery = false
     @Published var confirmImport = false
+    @Published var confirmRotation = false
+    @Published var confirmRevoke = false
+    @Published var confirmHistoryDeletion = false
+    @Published var revokedPeer = ""
+    @Published var synchronizeHistoryDeletion = true
+    private var rotationBackup: URL?
+    private var rotationDirectory: URL?
     private var pendingRecovery: URL?
     @Published var recoveryDocument = RecoveryDocument(data: Data())
     let vpn = AppleVPNController()
@@ -113,6 +120,55 @@ final class IOSModel: ObservableObject {
 
     func disconnect() async { vpn.disconnect(); message = "Disconnecting…" }
 
+    func stop() async {
+        if [.connected, .connecting, .reasserting].contains(vpn.status) { vpn.disconnect(); message = "Disconnecting VPN…"; return }
+        do { if let previous = node { try await coreOperation { try previous.stop() } }; node = nil; message = "Meshway stopped." }
+        catch { message = error.localizedDescription }
+    }
+
+    func prepareRotation() {
+        guard node == nil, ![.connected, .connecting, .reasserting].contains(vpn.status) else { message = "Stop Meshway and its VPN before replacing your recovery key."; return }
+        do {
+            let staging = configURL.deletingLastPathComponent().appendingPathComponent("rotation-stage-" + UUID().uuidString)
+            try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true, attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication])
+            let backup = staging.appendingPathComponent("new-recovery.json")
+            var error: NSError?
+            guard MeshwayRotateRecoverySecure(staging.appendingPathComponent("node").path, backup.path, try NativeStateKey.loadOrCreate(), &error) else { try? FileManager.default.removeItem(at: staging); throw error ?? NSError(domain: "Meshway", code: 6) }
+            rotationDirectory = staging; rotationBackup = backup
+            recoveryDocument = RecoveryDocument(data: try Data(contentsOf: backup)); exportRecovery = true
+        } catch { message = error.localizedDescription }
+    }
+
+    func finishedExport(_ result: Result<URL, Error>) {
+        defer {
+            if let directory = rotationDirectory { try? FileManager.default.removeItem(at: directory) }
+            rotationDirectory = nil; rotationBackup = nil; recoveryDocument = RecoveryDocument(data: Data())
+        }
+        do {
+            _ = try result.get()
+            if let backup = rotationBackup {
+                var error: NSError?
+                guard MeshwayImportRecoverySecure(stateURL.path, backup.path, true, try NativeStateKey.loadOrCreate(), &error) else { throw error ?? NSError(domain: "Meshway", code: 7) }
+                message = "Your account ID changed. Import the saved new backup on every trusted device and private server."
+            } else { message = "Recovery backup saved. Keep it private." }
+        } catch { message = error.localizedDescription }
+    }
+
+    func revokeDevice() async {
+        guard let node else { message = "Start Meshway first."; return }
+        let peer = revokedPeer.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !peer.isEmpty else { message = "Enter the device peer ID first."; return }
+        do { try await coreOperation { try node.revokeDevice(peer) }; await refresh(); message = "Device revoked. Trusted devices receive the signed revocation when they sync." }
+        catch { message = error.localizedDescription }
+    }
+
+    func clearHistory() async {
+        guard let node else { message = "Start Meshway first."; return }
+        let synchronize = synchronizeHistoryDeletion
+        do { try await coreOperation { try node.clearHistory(synchronize) }; await refresh(); message = "Connection history deleted." }
+        catch { message = error.localizedDescription }
+    }
+
     func prepareRecovery() {
         do {
             try node?.stop(); node = nil
@@ -170,6 +226,7 @@ struct MeshwayIOSApp: App {
                         IOSVPNStatus(vpn: model.vpn)
                         Text(model.message).foregroundStyle(.secondary)
                         Button("Disconnect VPN") { Task { await model.disconnect() } }
+                        Button("Stop Meshway") { Task { await model.stop() } }
                         Button("Refresh servers") { Task { await model.start(); await model.refresh() } }
                     }
                     Section("Servers") {
@@ -195,20 +252,33 @@ struct MeshwayIOSApp: App {
                         Text("Keep your recovery file private. It lets your other devices join this account.").font(.caption)
                         Button("Save recovery file") { model.prepareRecovery() }
                         Button("Import recovery file") { model.importRecovery = true }
+                        Button("Replace recovery key…") { model.confirmRotation = true }
+                        TextField("Device peer ID to revoke", text: $model.revokedPeer).textInputAutocapitalization(.never).autocorrectionDisabled()
+                        Button("Revoke device…") { model.confirmRevoke = true }
+                        Toggle("Apply history deletion to synced devices", isOn: $model.synchronizeHistoryDeletion)
+                        Button("Delete connection history…") { model.confirmHistoryDeletion = true }
                         DisclosureGroup("Advanced account details") { Text(model.account).font(.caption).textSelection(.enabled) }
                     }
                 }.navigationTitle("Meshway")
+            }
+            .confirmationDialog("Stop Meshway and its VPN first. Replacing the recovery key creates a new account ID and clears local records. Save the new backup and import it on every trusted device and personal server. The old key still controls the old account.", isPresented: $model.confirmRotation, titleVisibility: .visible) {
+                Button("Choose a new recovery backup", role: .destructive) { model.prepareRotation() }
+                Button("Cancel", role: .cancel) { }
+            }
+            .confirmationDialog("Revoke this device? Signed revocations apply on the next trusted-device sync. Rotate the account if its recovery key is compromised.", isPresented: $model.confirmRevoke, titleVisibility: .visible) {
+                Button("Revoke device", role: .destructive) { Task { await model.revokeDevice() } }
+                Button("Cancel", role: .cancel) { }
+            }
+            .confirmationDialog("Delete connection history? With sync enabled, a signed deletion record applies on other devices when they next synchronize.", isPresented: $model.confirmHistoryDeletion, titleVisibility: .visible) {
+                Button("Delete history", role: .destructive) { Task { await model.clearHistory() } }
+                Button("Cancel", role: .cancel) { }
             }
             .confirmationDialog("Replace this device's account? Save the old recovery file first if you need it. Import clears local device/history records.", isPresented: $model.confirmImport, titleVisibility: .visible) {
                 Button("Import and replace local account", role: .destructive) { model.performImport() }
                 Button("Cancel", role: .cancel) { }
             }
             .fileImporter(isPresented: $model.importRecovery, allowedContentTypes: [.json], allowsMultipleSelection: false, onCompletion: model.imported)
-            .fileExporter(isPresented: $model.exportRecovery, document: model.recoveryDocument, contentType: .json, defaultFilename: "meshway-recovery") { result in
-                model.recoveryDocument = RecoveryDocument(data: Data())
-                if case .failure(let error) = result { model.message = error.localizedDescription }
-                Task { await model.start() }
-            }
+            .fileExporter(isPresented: $model.exportRecovery, document: model.recoveryDocument, contentType: .json, defaultFilename: "meshway-recovery", onCompletion: model.finishedExport)
         }
     }
 }

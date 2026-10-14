@@ -48,6 +48,24 @@ final class APITests: XCTestCase {
         catch { XCTAssertEqual(error as? ClientError, .requestFailed(401, "unauthorized")) }
     }
 
+    func testRevocationAndSignedHistoryDeletionUseAuthenticatedMutation() async throws {
+        let (api, config) = try client()
+        MockURLProtocol.handler = { request in
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer \(config.apiToken)")
+            if request.url?.path == "/v1/account/revoke" {
+                XCTAssertEqual(request.httpMethod, "POST")
+            } else {
+                XCTAssertEqual(request.url?.path, "/v1/account/history")
+                XCTAssertEqual(request.httpMethod, "DELETE")
+            }
+            return (401, Data("unauthorized".utf8))
+        }
+        do { try await api.revokeDevice(peerID: "peer"); XCTFail("Revocation must report a rejected request") }
+        catch { XCTAssertEqual(error as? ClientError, .requestFailed(401, "unauthorized")) }
+        do { try await api.clearHistory(synchronize: true); XCTFail("Deletion must report a rejected request") }
+        catch { XCTAssertEqual(error as? ClientError, .requestFailed(401, "unauthorized")) }
+    }
+
     func testConnectAndShutdownUsePostAndBearer() async throws {
         let (api, config) = try client()
         MockURLProtocol.handler = { request in
