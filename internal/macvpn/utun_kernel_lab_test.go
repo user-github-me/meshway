@@ -37,7 +37,9 @@ func TestHostedUTUNKernelUDPMetadata(t *testing.T) {
 		}
 	}()
 	before := kernelLabBaseline(t)
-	probe := exec.Command("/sbin/route", "-n", "get", "-inet", "-host", "10.77.0.1")
+	probeCtx, probeCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	probe := exec.CommandContext(probeCtx, "/sbin/route", "-n", "get", "-inet", "-host", "10.77.0.1")
+	defer probeCancel()
 	if existing, probeErr := probe.Output(); probeErr == nil && parseRoute(existing).Destination == "10.77.0.1" {
 		t.Fatal("refusing an existing exact virtual DNS host route")
 	}
@@ -60,7 +62,9 @@ func TestHostedUTUNKernelUDPMetadata(t *testing.T) {
 		}
 		metadata["baseline_preserved"] = before == kernelLabBaseline(t)
 		metadata["owned_interface_closed"] = cleanupOK
-		post := exec.Command("/sbin/route", "-n", "get", "-inet", "-host", "10.77.0.1")
+		postCtx, postCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer postCancel()
+		post := exec.CommandContext(postCtx, "/sbin/route", "-n", "get", "-inet", "-host", "10.77.0.1")
 		observed, probeErr := post.Output()
 		removed := probeErr == nil && parseRoute(observed).Interface != name
 		if probeErr != nil {
@@ -98,45 +102,57 @@ func TestHostedUTUNKernelUDPMetadata(t *testing.T) {
 		t.Fatal(err)
 	}
 	routeAdded = true
-	conn, err := net.DialUDP("udp4", &net.UDPAddr{IP: net.ParseIP("10.77.0.2")}, &net.UDPAddr{IP: net.ParseIP("10.77.0.1"), Port: 53})
-	if err != nil {
-		t.Fatal(err)
+	for _, mode := range []string{"bound", "unbound"} {
+		var local *net.UDPAddr
+		if mode == "bound" {
+			local = &net.UDPAddr{IP: net.ParseIP("10.77.0.2")}
+		}
+		conn, err := net.DialUDP("udp4", local, &net.UDPAddr{IP: net.ParseIP("10.77.0.1"), Port: 53})
+		if err != nil {
+			t.Fatal(err)
+		}
+		dummy := []byte{0x49, 0x23, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 7, 'e', 'x', 'a', 'm', 'p', 'l', 'e', 3, 'c', 'o', 'm', 0, 0, 1, 0, 1}
+		if _, err = conn.Write(dummy); err != nil {
+			conn.Close()
+			t.Fatal(err)
+		}
+		stop := time.AfterFunc(5*time.Second, device.cancelReaders)
+		for {
+			raw := make([]byte, 1284)
+			n, readErr := device.Read(raw)
+			if readErr != nil {
+				stop.Stop()
+				conn.Close()
+				t.Fatal(readErr)
+			}
+			raw = raw[:n]
+			packet, decodeErr := decodeFrame(raw, 1280)
+			if decodeErr != nil {
+				continue
+			}
+			if packet[0]>>4 != 4 || len(packet) < 28 || packet[9] != 17 || net.IP(packet[16:20]).String() != "10.77.0.1" {
+				continue
+			}
+			h := int(packet[0]&15) * 4
+			if len(packet) < h+8 {
+				continue
+			}
+			udp := packet[h:]
+			if binary.BigEndian.Uint16(udp[2:4]) != 53 {
+				continue
+			}
+			pseudo := append([]byte{}, packet[12:20]...)
+			pseudo = append(pseudo, 0, 17, byte(len(udp)>>8), byte(len(udp)))
+			pseudo = append(pseudo, udp...)
+			metadata[mode+"_packet"] = map[string]any{"utun_family": binary.BigEndian.Uint32(raw[:4]), "version": 4, "source_is_virtual_client": net.IP(packet[12:16]).String() == "10.77.0.2", "destination": "10.77.0.1", "protocol": 17, "ip_total_length": binary.BigEndian.Uint16(packet[2:4]), "frame_payload_length": len(packet), "ipv4_header_checksum": binary.BigEndian.Uint16(packet[10:12]), "ipv4_header_checksum_valid": kernelLabSum(packet[:h]) == 0xffff, "udp_length": binary.BigEndian.Uint16(udp[4:6]), "udp_checksum": binary.BigEndian.Uint16(udp[6:8]), "udp_checksum_valid": kernelLabSum(pseudo) == 0xffff, "udp_checksum_omitted": binary.BigEndian.Uint16(udp[6:8]) == 0}
+			stop.Stop()
+			conn.Close()
+			break
+		}
 	}
-	defer conn.Close()
-	// Fixed diagnostic DNS payload. Never reads user requests or account state.
-	dummy := []byte{0x49, 0x23, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 7, 'e', 'x', 'a', 'm', 'p', 'l', 'e', 3, 'c', 'o', 'm', 0, 0, 1, 0, 1}
-	if _, err = conn.Write(dummy); err != nil {
-		t.Fatal(err)
-	}
-	stop := time.AfterFunc(5*time.Second, device.cancelReaders)
-	defer stop.Stop()
-	for {
-		raw := make([]byte, 1284)
-		n, readErr := device.Read(raw)
-		if readErr != nil {
-			t.Fatal(readErr)
-		}
-		raw = raw[:n]
-		packet, decodeErr := decodeFrame(raw, 1280)
-		if decodeErr != nil {
-			continue
-		}
-		if packet[0]>>4 != 4 || len(packet) < 28 || packet[9] != 17 || net.IP(packet[12:16]).String() != "10.77.0.2" || net.IP(packet[16:20]).String() != "10.77.0.1" {
-			continue
-		}
-		headerLength := int(packet[0]&15) * 4
-		if len(packet) < headerLength+8 {
-			continue
-		}
-		udp := packet[headerLength:]
-		pseudo := append([]byte{}, packet[12:20]...)
-		pseudo = append(pseudo, 0, 17, byte(len(udp)>>8), byte(len(udp)))
-		pseudo = append(pseudo, udp...)
-		metadata["packet"] = map[string]any{"utun_family": binary.BigEndian.Uint32(raw[:4]), "version": 4, "source": "10.77.0.2", "destination": "10.77.0.1", "protocol": 17, "ip_total_length": binary.BigEndian.Uint16(packet[2:4]), "frame_payload_length": len(packet), "ipv4_header_checksum": binary.BigEndian.Uint16(packet[10:12]), "ipv4_header_checksum_valid": kernelLabSum(packet[:headerLength]) == 0xffff, "udp_length": binary.BigEndian.Uint16(udp[4:6]), "udp_checksum": binary.BigEndian.Uint16(udp[6:8]), "udp_checksum_valid": kernelLabSum(pseudo) == 0xffff, "udp_checksum_omitted": binary.BigEndian.Uint16(udp[6:8]) == 0}
-		metadata["status"] = "PASS"
-		t.Log("captured actual Darwin UDP checksum and source metadata without default routes or DNS changes")
-		break
-	}
+	metadata["status"] = "PASS"
+	t.Log("captured actual bound and unbound Darwin UDP header metadata without defaults/DNS changes")
+
 }
 
 func kernelLabSum(data []byte) uint16 {
