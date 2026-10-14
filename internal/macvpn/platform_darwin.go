@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -906,6 +907,9 @@ func Run(ctx context.Context, o Options) (result error) {
 	go func() {
 		defer workers.Done()
 		buffer := make([]byte, 9004)
+		diagnostic := os.Getenv("GITHUB_ACTIONS") == "true" && os.Getenv("MESHWAY_DISPOSABLE_MACOS_VM") == "1" && os.Getenv("MESHWAY_UTUN_PACKET_DIAGNOSTICS") == "1"
+		seen := map[byte]bool{}
+		writeFailureReported := false
 		for {
 			n, err := device.Read(buffer)
 			if err != nil {
@@ -918,19 +922,55 @@ func Run(ctx context.Context, o Options) (result error) {
 			if err != nil {
 				continue
 			}
+			if diagnostic && !seen[packet[0]>>4] {
+				family := packet[0] >> 4
+				ipHeader, proto, source, destination := 20, packet[9], packet[12:16], packet[16:20]
+				if family == 6 {
+					ipHeader, proto, source, destination = 40, packet[6], packet[8:24], packet[24:40]
+				} else {
+					ipHeader = int(packet[0]&15) * 4
+				}
+				if proto == 17 && len(packet) >= ipHeader+8 && binary.BigEndian.Uint16(packet[ipHeader+2:ipHeader+4]) == 53 {
+					dns := net.IP(destination).String()
+					if dns == "10.77.0.1" || dns == "fd77::1" {
+						seen[family] = true
+						udp := packet[ipHeader:]
+						pseudo := append([]byte{}, source...)
+						pseudo = append(pseudo, destination...)
+						if family == 4 {
+							pseudo = append(pseudo, 0, 17, byte(len(udp)>>8), byte(len(udp)))
+						} else {
+							pseudo = append(pseudo, 0, 0, byte(len(udp)>>8), byte(len(udp)), 0, 0, 0, 17)
+						}
+						pseudo = append(pseudo, udp...)
+						data, _ := json.Marshal(map[string]any{"meshway_packet_diagnostic": true, "family": family, "source_is_virtual_client": net.IP(source).String() == "10.77.0.2" || net.IP(source).String() == "fd77::2", "udp_checksum_valid": packetChecksum(pseudo) == 0xffff, "udp_checksum": binary.BigEndian.Uint16(udp[6:8]), "ipv4_header_checksum_valid": family != 4 || packetChecksum(packet[:ipHeader]) == 0xffff, "packet_length": len(packet), "udp_length": binary.BigEndian.Uint16(udp[4:6])})
+						fmt.Fprintln(os.Stderr, string(data))
+					}
+				}
+			}
 			if _, _, err = api.request(runCtx, "/v1/vpn/write", packet, "application/octet-stream"); err != nil && runCtx.Err() == nil {
+				if diagnostic && !writeFailureReported {
+					writeFailureReported = true
+					fmt.Fprintln(os.Stderr, `{"meshway_packet_diagnostic":true,"write_failed":true}`)
+				}
 				time.Sleep(100 * time.Millisecond)
 			}
 		}
 	}()
 	go func() {
 		defer workers.Done()
+		readFailureReported := false
+		diagnostic := os.Getenv("GITHUB_ACTIONS") == "true" && os.Getenv("MESHWAY_DISPOSABLE_MACOS_VM") == "1" && os.Getenv("MESHWAY_UTUN_PACKET_DIAGNOSTICS") == "1"
 		for {
 			packet, status, err := api.request(runCtx, "/v1/vpn/read", nil, "")
 			if runCtx.Err() != nil {
 				return
 			}
 			if err != nil {
+				if diagnostic && !readFailureReported {
+					readFailureReported = true
+					fmt.Fprintln(os.Stderr, `{"meshway_packet_diagnostic":true,"read_failed":true}`)
+				}
 				time.Sleep(200 * time.Millisecond)
 				continue
 			}
@@ -966,4 +1006,19 @@ func Run(ctx context.Context, o Options) (result error) {
 			}
 		}
 	}
+}
+
+func packetChecksum(data []byte) uint16 {
+	var sum uint32
+	for len(data) >= 2 {
+		sum += uint32(binary.BigEndian.Uint16(data))
+		data = data[2:]
+	}
+	if len(data) == 1 {
+		sum += uint32(data[0]) << 8
+	}
+	for sum>>16 != 0 {
+		sum = (sum & 0xffff) + (sum >> 16)
+	}
+	return uint16(sum)
 }
