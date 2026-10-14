@@ -589,7 +589,15 @@ final class AppModel: ObservableObject {
             do { try await nativeVPN.stop() }
             catch { self.error = error.localizedDescription; return false }
         }
-        if [.connected,.connecting,.reasserting].contains(vpn.status) { vpn.disconnect() }
+        if [.connected,.connecting,.reasserting].contains(vpn.status) {
+            vpn.disconnect()
+            for _ in 0..<50 {
+                if ![.connected,.connecting,.reasserting,.disconnecting].contains(vpn.status) { return true }
+                try? await Task.sleep(for:.milliseconds(100))
+            }
+            error = "The Apple VPN extension is still stopping. Wait for it to disconnect before closing Meshway."
+            return false
+        }
         return true
     }
     func restoreForQuit() async -> Bool {

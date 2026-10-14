@@ -95,6 +95,23 @@ public final class NativeMacVPNController: ObservableObject {
     private var plan: NativeMacVPNPlan?
     private var monitor: Task<Void,Never>?
     private var configuration: Configuration?
+    struct CaptureObservation: Sendable { let active: Bool; let ready: Bool; let peerID: String?; let instance: String?; let device: String? }
+    struct OwnedLauncher {
+        let isRunning: () -> Bool
+        let end: () async -> Void
+        let detail: () -> String
+        init(isRunning: @escaping () -> Bool,end: @escaping () async -> Void,detail: @escaping () -> String = {""}) { self.isRunning = isRunning;self.end = end;self.detail = detail }
+    }
+    struct LifecycleHooks {
+        let launch: (String) throws -> OwnedLauncher
+        let observe: () async throws -> CaptureObservation
+        let cleanup: (NativeMacVPNPlan,URL) async throws -> String
+        let pause: () async -> Void
+        let now: () -> TimeInterval
+        let timeout: TimeInterval
+    }
+    private var lifecycle: LifecycleHooks?
+    private var ownedLauncher: OwnedLauncher?
 
     public init(bundle: Bundle = .main) {
         // This marker is intentionally absent until the root agent records an
@@ -133,30 +150,40 @@ public final class NativeMacVPNController: ObservableObject {
     private func launchVerifiedHelper(_ plan: NativeMacVPNPlan) async throws {
         let digest = try await Task.detached { SHA256.hash(data:try Data(contentsOf:plan.bundledExecutable)).map { String(format:"%02x",$0) }.joined() }.value
         let (script, installed) = try plan.installAndStartScript(sha256:digest)
-        let child = try Self.appleScript(script)
-        self.plan = plan; installedExecutable = installed; launcher = child; state = .connecting
-        let deadline = Date().addingTimeInterval(120)
+        let (child,diagnostics) = try Self.appleScript(script)
         guard let configuration else { throw ClientError.invalidConfiguration("Device VPN configuration is unavailable.") }
         let api = try DaemonAPI(configuration:configuration)
-        while Date() < deadline {
-            guard child.isRunning else { state = .recoveryRequired; throw ClientError.invalidConfiguration("The administrator helper ended before capture was confirmed. Review the macOS authorization result and restore owned networking before retrying.") }
-            let status = try? await api.status()
-            if status?.vpn?.capture_ready == true, status?.vpn?.peer_id == plan.peerID, status?.vpn?.capture_instance == plan.captureInstance {
-                device = status?.vpn?.capture_device; state = status?.vpn?.active == true ? .connected : .reconnecting
+        launcher = child
+        let hooks = LifecycleHooks(launch:{ _ in OwnedLauncher(isRunning:{child.isRunning},end:{await Self.endOwnedLauncher(child)},detail:{diagnostics.text}) },observe:{
+            let value = try await api.status().vpn
+            return CaptureObservation(active:value?.active == true,ready:value?.capture_ready == true,peerID:value?.peer_id,instance:value?.capture_instance,device:value?.capture_device)
+        },cleanup:Self.cleanupVerified,pause:{try? await Task.sleep(for:.milliseconds(250))},now:{ProcessInfo.processInfo.systemUptime},timeout:120)
+        try await beginLifecycle(plan:plan,installed:installed,script:script,hooks:hooks)
+    }
+    /// Production and injected checks use the same ownership/readiness loop.
+    func beginLifecycle(plan: NativeMacVPNPlan, installed: URL, script: String, hooks: LifecycleHooks) async throws {
+        self.plan = plan; installedExecutable = installed; lifecycle = hooks; state = .connecting
+        let child = try hooks.launch(script); ownedLauncher = child
+        let deadline = hooks.now() + hooks.timeout
+        while hooks.now() < deadline {
+            guard child.isRunning() else { state = .recoveryRequired; throw ClientError.invalidConfiguration("The administrator helper ended before capture was confirmed. Review macOS authorization and restore owned networking before retrying. " + child.detail()) }
+            let status = try? await hooks.observe()
+            if status?.ready == true, status?.peerID == plan.peerID, status?.instance == plan.captureInstance {
+                device = status?.device; state = status?.active == true ? .connected : .reconnecting
                 monitor = Task { [weak self] in
                     while !Task.isCancelled {
-                        try? await Task.sleep(for:.seconds(2))
+                        await hooks.pause()
                         guard let self else { return }
-                        guard child.isRunning else { self.state = .recoveryRequired; self.error = "The device VPN helper ended. Explicitly restore its owned routes and resolver before reconnecting."; return }
-                        let status = try? await api.status()
-                        self.state = status?.vpn?.active == true && status?.vpn?.capture_ready == true && status?.vpn?.capture_instance == plan.captureInstance ? .connected : .reconnecting
+                        guard child.isRunning() else { self.state = .recoveryRequired; self.error = "The device VPN helper ended. Explicitly restore its owned routes and resolver before reconnecting."; return }
+                        let status = try? await hooks.observe()
+                        self.state = status?.active == true && status?.ready == true && status?.instance == plan.captureInstance ? .connected : .reconnecting
                     }
                 }
                 return
             }
-            try? await Task.sleep(for:.milliseconds(250))
+            await hooks.pause()
         }
-        await Self.endOwnedLauncher(child)
+        await child.end()
         // Do not kill shared authorization services. Scoped cleanup below
         // decides whether any late-started root helper owns this journal.
         state = .recoveryRequired
@@ -171,6 +198,16 @@ public final class NativeMacVPNController: ObservableObject {
         }
         state = .restoring; monitor?.cancel(); monitor = nil
         do {
+            guard let lifecycle else { throw ClientError.invalidConfiguration("The device VPN lifecycle owner is unavailable. Keep the daemon running and restore this configuration explicitly.") }
+            let verified = try await lifecycle.cleanup(plan,installedExecutable)
+            struct Cleanup: Decodable { let active: Bool; let running: Bool?; let network_cleanup_pending: Bool? }
+            let cleanup = try JSONDecoder().decode(Cleanup.self,from:Data(verified.utf8))
+            guard !cleanup.active, cleanup.running != true, cleanup.network_cleanup_pending != true else { throw ClientError.invalidConfiguration("Owned device VPN cleanup remains pending. Keep the daemon running and retry restoration.") }
+            if let ownedLauncher { await ownedLauncher.end() }
+            self.launcher = nil; ownedLauncher = nil; state = .disconnected; device = nil; error = nil
+        } catch { state = .recoveryRequired; self.error = error.localizedDescription; throw error }
+    }
+    nonisolated private static func cleanupVerified(_ plan: NativeMacVPNPlan,_ installedExecutable: URL) async throws -> String {
             let shell = try plan.command(executable:installedExecutable,action:"stop")
             let statusCommand = try plan.command(executable:installedExecutable,action:"status")
             // Both operations share one administrator authorization. Poll the
@@ -187,27 +224,27 @@ public final class NativeMacVPNController: ObservableObject {
             done
             /usr/bin/printf '%s' "$status"
             """
-            let verified = try await Task.detached { try Self.runAdministratorScript("do shell script " + NativeMacVPNPlan.appleScriptQuote(combined) + " with administrator privileges",timeout:120) }.value
-            struct Cleanup: Decodable { let active: Bool; let running: Bool?; let network_cleanup_pending: Bool? }
-            let cleanup = try JSONDecoder().decode(Cleanup.self,from:Data(verified.utf8))
-            guard !cleanup.active, cleanup.running != true, cleanup.network_cleanup_pending != true else { throw ClientError.invalidConfiguration("Owned device VPN cleanup remains pending. Keep the daemon running and retry restoration.") }
-            if let launcher { await Self.endOwnedLauncher(launcher) }
-            self.launcher = nil; state = .disconnected; device = nil; error = nil
-        } catch { state = .recoveryRequired; self.error = error.localizedDescription; throw error }
+            return try await Task.detached { try Self.runAdministratorScript("do shell script " + NativeMacVPNPlan.appleScriptQuote(combined) + " with administrator privileges",timeout:120) }.value
     }
     nonisolated private static func runAdministratorScript(_ script: String, timeout: TimeInterval) throws -> String {
         // The script contains only verified paths and public transport values;
         // it reaches osascript over stdin, never shell arguments or a file.
         try ProxyWorkerClient.readCommand(executable:URL(fileURLWithPath:"/usr/bin/osascript"),arguments:["-"],timeout:timeout,input:Data(script.utf8))
     }
-    private static func appleScript(_ script: String) throws -> Process {
-        let child = Process(); let input = Pipe()
+    private static func appleScript(_ script: String) throws -> (Process,BoundedHelperDiagnostics) {
+        let child = Process(); let input = Pipe();let failure = Pipe();let diagnostics=BoundedHelperDiagnostics()
         child.executableURL = URL(fileURLWithPath:"/usr/bin/osascript"); child.arguments = ["-"]
         child.environment = ["PATH":"/usr/bin:/bin:/usr/sbin:/sbin","LC_ALL":"C"]
-        child.standardInput = input; child.standardOutput = FileHandle.nullDevice; child.standardError = FileHandle.nullDevice
+        child.standardInput = input; child.standardOutput = FileHandle.nullDevice; child.standardError = failure
+        failure.fileHandleForReading.readabilityHandler = { handle in
+            let data=handle.availableData
+            if data.isEmpty { handle.readabilityHandler=nil;try? handle.close() }
+            else { diagnostics.append(data) }
+        }
         try child.run(); input.fileHandleForReading.closeFile()
+        failure.fileHandleForWriting.closeFile()
         try input.fileHandleForWriting.write(contentsOf:Data(script.utf8)); input.fileHandleForWriting.closeFile()
-        return child
+        return (child,diagnostics)
     }
     nonisolated private static func endOwnedLauncher(_ child: Process) async {
         await Task.detached {
@@ -248,4 +285,10 @@ public final class NativeMacVPNController: ObservableObject {
         guard !ips.isEmpty, ips.count <= 32 else { throw ClientError.invalidConfiguration("No bounded physical transport addresses were resolved.") }
         return Array(ips)
     }
+}
+
+private final class BoundedHelperDiagnostics: @unchecked Sendable {
+    private let lock=NSLock();private var data=Data()
+    func append(_ value: Data) { lock.lock();defer {lock.unlock()};data.append(value.prefix(max(0,4096-data.count))) }
+    var text: String { lock.lock();defer {lock.unlock()};return String(decoding:data.prefix(512),as:UTF8.self).trimmingCharacters(in:.whitespacesAndNewlines) }
 }

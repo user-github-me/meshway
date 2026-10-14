@@ -1,6 +1,6 @@
 {
   "status": "PASS",
-  "swift_tests_passed": 33,
+  "swift_tests_passed": 41,
   "swift_tests_skipped": 0,
   "universal_xcode_build": true,
   "real_managed_ssh_authenticated": true,
@@ -100,5 +100,21 @@
     "deep_codesign_verification": true,
     "actual_worker_eof_entry": true,
     "scope": "Separate release staging with final journal-v3 core and bounded-worker source; current personal runtime app and DMG remain unchanged"
+  },
+  "administrator_vpn_gui_source": {
+    "status": "Implemented and runtime gated",
+    "qualification_marker_enabled": false,
+    "launch": "Fixed bundled core copied and SHA256/codesign verified under root-protected hash-versioned path; administrator script over stdin",
+    "underlay": "Bounded owned SSH config reader and20-second numeric resolver child; ProxyJump/ProxyCommand refused; max32 transport addresses",
+    "readiness": "Requires authenticated owned packet capture acknowledgement, unique capture instance and live owned foreground launcher",
+    "shutdown": "System proxy restored before device capture; instance/config-scoped Stop and privileged cleanup status verified before daemon stop; journal retained on uncertain recovery",
+    "tests": "SSH opaque-hop rejection, numeric endpoint bounds, injection-safe literal shell quoting, helper plan validation, and actual osacompile of generated administrator script without execution; no host routes or DNS changes.",
+    "limitation": "Qualification marker stays absent until exact native hosted-route, resolver, failure and GUI lifecycle evidence passes. Current private runtime and DMG do not contain this later source integration.",
+    "lifecycle_tests": [
+      "Foreign same-peer capture instance ignored until own acknowledgement",
+      "Cleanup failure retains running launcher and recovery state",
+      "Readiness timeout ends only owned launcher and confirms instance-scoped cleanup"
+    ],
+    "helper_errors": "Bounded private in-memory stderr drain; human-facing first512bytes; no API or account credentials in process arguments"
   }
 }
