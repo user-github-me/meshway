@@ -189,4 +189,80 @@ final class SystemProxyTests: XCTestCase {
         XCTAssertEqual(fake.writes, 0)
         withExtendedLifetime(first) { }
     }
+
+    private func appliedJournal(_ dir: URL, fake: FakeProxy) throws {
+        fake.keys = ["Wi-Fi": .init(host: nil, port: nil, enabled: nil, httpEnabled: 1), "Ethernet": .init(host: "old.example", port: 1088, enabled: 1)]
+        var first: SystemProxyController? = SystemProxyController(directory: dir, runner: fake.run, snapshotter: { fake.keys![$0]! }, effectiveChecker: { _, _ in true })
+        try first!.enable(host: "127.0.0.1", port: 1080)
+        first = nil
+    }
+
+    func testResumeOwnAppliedJournalOnlyReadsAndRetainsRecoveryFile() async throws {
+        let dir = try directory(); defer { try? FileManager.default.removeItem(at: dir) }
+        let fake = FakeProxy(); try appliedJournal(dir, fake: fake)
+        let path = dir.appendingPathComponent("system-proxy-restore.json")
+        let saved = try Data(contentsOf: path), writes = fake.writes
+        let resumed = SystemProxyController(directory: dir, runner: fake.run, snapshotter: { fake.keys![$0]! }, effectiveChecker: { $0 == "127.0.0.1" && $1 == 1080 })
+        let healthy = await resumed.resumeOwnAppliedJournalAsync(host: "127.0.0.1", port: 1080)
+        XCTAssertTrue(healthy); XCTAssertEqual(fake.writes, writes); XCTAssertEqual(try Data(contentsOf: path), saved)
+        await MainActor.run { XCTAssertTrue(resumed.enabled); XCTAssertFalse(resumed.needsRecovery); XCTAssertFalse(resumed.changedExternally) }
+        let stillApplied = await resumed.verifyStillAppliedAsync(); XCTAssertTrue(stillApplied)
+    }
+
+    func testResumeRejectsForeignEndpointWithoutWrites() async throws {
+        for endpoint in [("127.0.0.1", 1081), ("::1", 1080), ("203.0.113.1", 1080)] {
+            let dir = try directory(); defer { try? FileManager.default.removeItem(at: dir) }
+            let fake = FakeProxy(); try appliedJournal(dir, fake: fake); let writes = fake.writes
+            let resumed = SystemProxyController(directory: dir, runner: fake.run, snapshotter: { fake.keys![$0]! }, effectiveChecker: { _, _ in true })
+            let healthy = await resumed.resumeOwnAppliedJournalAsync(host: endpoint.0, port: endpoint.1)
+            XCTAssertFalse(healthy); XCTAssertEqual(fake.writes, writes)
+            await MainActor.run { XCTAssertFalse(resumed.enabled); XCTAssertTrue(resumed.needsRecovery) }
+        }
+    }
+
+    func testResumeRejectsExternalServiceChangesWithoutWrites() async throws {
+        for field in ["socks", "http", "disabled", "missing"] {
+            let dir = try directory(); defer { try? FileManager.default.removeItem(at: dir) }
+            let fake = FakeProxy(); try appliedJournal(dir, fake: fake)
+            if field == "socks" { fake.services["Wi-Fi"]!.host = "external.example"; fake.keys!["Wi-Fi"]!.host = "external.example" }
+            if field == "http" { fake.keys!["Wi-Fi"]!.httpEnabled = 1 }
+            if field == "disabled" { fake.services["Wi-Fi"]!.enabled = false; fake.keys!["Wi-Fi"]!.enabled = 0 }
+            if field == "missing" { fake.services.removeValue(forKey: "Wi-Fi") }
+            let writes = fake.writes, current = fake.services, keys = fake.keys
+            let resumed = SystemProxyController(directory: dir, runner: fake.run, snapshotter: { fake.keys![$0]! }, effectiveChecker: { _, _ in true })
+            let healthy = await resumed.resumeOwnAppliedJournalAsync(host: "127.0.0.1", port: 1080)
+            XCTAssertFalse(healthy); XCTAssertEqual(fake.writes, writes); XCTAssertEqual(fake.services, current); XCTAssertEqual(fake.keys, keys)
+            await MainActor.run { XCTAssertFalse(resumed.enabled); XCTAssertTrue(resumed.needsRecovery); XCTAssertTrue(resumed.changedExternally) }
+        }
+    }
+
+    func testResumeRejectsEffectiveProxyDriftAndInterruptedRestore() async throws {
+        for interrupted in [false, true] {
+            let dir = try directory(); defer { try? FileManager.default.removeItem(at: dir) }
+            let fake = FakeProxy(); try appliedJournal(dir, fake: fake)
+            if interrupted {
+                let path = dir.appendingPathComponent("system-proxy-restore.json")
+                var journal = try JSONSerialization.jsonObject(with: Data(contentsOf: path)) as! [String: Any]
+                journal["restoring"] = ["Wi-Fi"]
+                try JSONSerialization.data(withJSONObject: journal).write(to: path)
+                try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: path.path)
+            }
+            let writes = fake.writes
+            let resumed = SystemProxyController(directory: dir, runner: fake.run, snapshotter: { fake.keys![$0]! }, effectiveChecker: { _, _ in interrupted })
+            let healthy = await resumed.resumeOwnAppliedJournalAsync(host: "127.0.0.1", port: 1080)
+            XCTAssertFalse(healthy); XCTAssertEqual(fake.writes, writes)
+            await MainActor.run { XCTAssertFalse(resumed.enabled); XCTAssertTrue(resumed.needsRecovery) }
+        }
+    }
+
+    func testSecondAppCannotResumeOrRestoreJournalWithoutLock() async throws {
+        let dir = try directory(); defer { try? FileManager.default.removeItem(at: dir) }
+        let fake = FakeProxy(); try appliedJournal(dir, fake: fake)
+        let first = SystemProxyController(directory: dir, runner: fake.run, snapshotter: { fake.keys![$0]! }, effectiveChecker: { _, _ in true })
+        let second = SystemProxyController(directory: dir, runner: fake.run, snapshotter: { fake.keys![$0]! }, effectiveChecker: { _, _ in true })
+        let writes = fake.writes
+        let healthy = await second.resumeOwnAppliedJournalAsync(host: "127.0.0.1", port: 1080)
+        XCTAssertFalse(healthy); XCTAssertThrowsError(try second.restore()); XCTAssertEqual(fake.writes, writes)
+        withExtendedLifetime(first) { }
+    }
 }

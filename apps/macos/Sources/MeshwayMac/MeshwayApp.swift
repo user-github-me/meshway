@@ -103,6 +103,10 @@ final class AppModel: ObservableObject {
         }
         if status == nil { explicitDisconnected = false; await start() }
         guard status != nil else { return }
+        // Reopening may attach to a still-running owned daemon before the
+        // periodic monitor has loaded its approved server and proxy journal.
+        await refresh(showError: false)
+        guard status != nil else { return }
         if configuration.personalTransportEnabled && status?.transport?.authenticated != true {
             busy = true; message = "Opening your private SSH connection and verifying the server…"
             for _ in 0..<30 {
@@ -123,7 +127,10 @@ final class AppModel: ObservableObject {
         } else if selectedPeer.isEmpty {
             message = "Meshway is ready. Choose an approved server in Servers to connect."
         }
-        if peerConnected && canEnableSystemProxy && !systemProxy.enabled { await setSystemProxy(true) }
+        if peerConnected && canEnableSystemProxy {
+            if systemProxy.enabled && !internetVerified { await verifyExistingSystemProxyInternet() }
+            else if !systemProxy.enabled { await setSystemProxy(true) }
+        }
     }
     let vpn = AppleVPNController()
     let nativeVPN = NativeMacVPNController()
@@ -376,6 +383,7 @@ final class AppModel: ObservableObject {
             if let existing = try? await api.status() {
                 status = existing
                 message = "A daemon is already running with this configuration. Meshway is viewing its status."
+                await resumeExistingSystemProxy(for: existing)
                 return
             }
             guard FileManager.default.isExecutableFile(atPath: executablePath) else {
@@ -475,6 +483,7 @@ final class AppModel: ObservableObject {
             } else { sentPerSecond = nil; receivedPerSecond = nil }
             trafficSample = (live.started_at, live.bytes_sent, live.bytes_received, now)
             status = live
+            await resumeExistingSystemProxy(for: live)
             if systemProxy.enabled {
                 let stillApplied = await systemProxy.verifyStillAppliedAsync()
                 if !stillApplied {
@@ -578,6 +587,20 @@ final class AppModel: ObservableObject {
         status != nil && peerConnected && (status?.transport?.kind != "ssh" || status?.transport?.authenticated == true) && selectedServer?.can_connect == true && selectedServer?.roles.exit == true && !activeVPN && !deviceVPN && !(status?.socks_listen.isEmpty ?? true)
     }
 
+    private func resumeExistingSystemProxy(for live: DaemonStatus) async {
+        guard systemProxy.needsRecovery, !systemProxy.enabled, !activeVPN,
+              live.socks_listen == configuration.socksListen,
+              let endpoint = URLComponents(string: "socks://" + live.socks_listen),
+              endpoint.user == nil, endpoint.password == nil, endpoint.path.isEmpty,
+              endpoint.query == nil, endpoint.fragment == nil,
+              let rawHost = endpoint.host, let port = endpoint.port else { return }
+        let host = rawHost.replacingOccurrences(of: "[", with: "").replacingOccurrences(of: "]", with: "")
+        if await systemProxy.resumeOwnAppliedJournalAsync(host: host, port: port) {
+            internetVerified = false; observedExitIP = nil
+            message = "Your existing Meshway system proxy is still applied. Connect to verify secure internet access."
+        }
+    }
+
     @discardableResult
     func restoreSystemProxy() async -> Bool {
         do { try await systemProxy.restoreAsync(); internetVerified = false; observedExitIP = nil; return true }
@@ -625,26 +648,56 @@ final class AppModel: ObservableObject {
             try await checkSOCKSInternet(listener: listener)
             try await systemProxy.enableAsync(host: host.replacingOccurrences(of: "[", with: "").replacingOccurrences(of: "]", with: ""), port: port)
             do {
-                let before = try await DaemonAPI(configuration: configuration).status()
-                let session = URLSession(configuration: .ephemeral)
-                defer { session.invalidateAndCancel() }
-                var request = URLRequest(url: URL(string: "https://example.com/")!); request.timeoutInterval = 15
-                let (data, response) = try await session.data(for: request)
-                let after = try await DaemonAPI(configuration: configuration).status()
-                guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode), !data.isEmpty,
-                      after.bytes_received > before.bytes_received, after.bytes_sent > before.bytes_sent else { throw ClientError.invalidConfiguration("The macOS HTTPS request was not observed through Meshway. Check whether another app is overriding the system proxy.") }
-                var ipRequest = URLRequest(url: URL(string: "https://api.ipify.org?format=json")!); ipRequest.timeoutInterval = 15
-                let (ipData, ipResponse) = try await session.data(for: ipRequest)
-                struct IPResult: Decodable { let ip: String }
-                guard let ipHTTP = ipResponse as? HTTPURLResponse, (200..<300).contains(ipHTTP.statusCode), ipData.count <= 4096 else { throw ClientError.invalidConfiguration("The exit IP check was unavailable.") }
-                let ip = try JSONDecoder().decode(IPResult.self, from: ipData).ip
-                guard Self.validPublicIP(ip) else { throw ClientError.invalidConfiguration("The exit IP response was invalid.") }
-                observedExitIP = ip
+                observedExitIP = try await checkDefaultProxyInternet()
                 internetVerified = true
                 message = "Supported apps can use Meshway. Secure HTTPS through the macOS proxy passed."; error = nil
             } catch { _ = await restoreSystemProxy(); throw ClientError.invalidConfiguration("macOS proxy internet access did not pass its check. The previous proxy was restored. " + error.localizedDescription) }
         }
         catch { self.error = error.localizedDescription }
+    }
+
+    private func verifyExistingSystemProxyInternet() async {
+        guard !busy, canEnableSystemProxy, systemProxy.enabled else { return }
+        busy = true; defer { busy = false }
+        internetVerified = false; observedExitIP = nil
+        message = "Verifying secure internet access through your existing Meshway proxy…"
+        do {
+            guard await systemProxy.verifyStillAppliedAsync() else {
+                throw ClientError.invalidConfiguration("The system proxy changed outside Meshway. Previous settings remain saved for explicit restoration.")
+            }
+            let ip = try await checkDefaultProxyInternet()
+            guard await systemProxy.verifyStillAppliedAsync() else {
+                throw ClientError.invalidConfiguration("The system proxy changed during the internet check. Previous settings remain saved for explicit restoration.")
+            }
+            observedExitIP = ip; internetVerified = true
+            message = "Supported apps can use Meshway. Secure HTTPS through the existing macOS proxy passed."; error = nil
+        } catch {
+            // Resuming and testing an existing proxy never reapplies or restores
+            // preferences, including after a temporary server outage.
+            self.error = "Existing proxy internet access did not pass its check. " + error.localizedDescription
+        }
+    }
+
+    private func checkDefaultProxyInternet() async throws -> String {
+        let before = try await DaemonAPI(configuration: configuration).status()
+        let session = URLSession(configuration: .ephemeral)
+        defer { session.invalidateAndCancel() }
+        var request = URLRequest(url: URL(string: "https://example.com/")!); request.timeoutInterval = 15
+        let (data, response) = try await session.data(for: request)
+        let after = try await DaemonAPI(configuration: configuration).status()
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode), !data.isEmpty,
+              after.bytes_received > before.bytes_received, after.bytes_sent > before.bytes_sent else {
+            throw ClientError.invalidConfiguration("The macOS HTTPS request was not observed through Meshway. Check whether another app is overriding the system proxy.")
+        }
+        var ipRequest = URLRequest(url: URL(string: "https://api.ipify.org?format=json")!); ipRequest.timeoutInterval = 15
+        let (ipData, ipResponse) = try await session.data(for: ipRequest)
+        struct IPResult: Decodable { let ip: String }
+        guard let ipHTTP = ipResponse as? HTTPURLResponse, (200..<300).contains(ipHTTP.statusCode), ipData.count <= 4096 else {
+            throw ClientError.invalidConfiguration("The exit IP check was unavailable.")
+        }
+        let ip = try JSONDecoder().decode(IPResult.self, from: ipData).ip
+        guard Self.validPublicIP(ip) else { throw ClientError.invalidConfiguration("The exit IP response was invalid.") }
+        return ip
     }
 
     nonisolated private static func validPublicIP(_ value: String) -> Bool {

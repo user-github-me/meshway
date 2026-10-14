@@ -70,6 +70,7 @@ public final class SystemProxyController: ObservableObject, @unchecked Sendable 
     private let effectiveChecker: (String, Int) -> Bool
     private var journal: Journal?
     private var lock: Int32 = -1
+    private var ownsLock = false
 
     public init(directory: URL, runner: CommandRunner? = nil, snapshotter: ((String) throws -> ProxyKeys)? = nil, effectiveChecker: @escaping (String, Int) -> Bool = SystemProxyController.effectiveProxyMatches) {
         path = directory.appendingPathComponent("system-proxy-restore.json")
@@ -92,26 +93,18 @@ public final class SystemProxyController: ObservableObject, @unchecked Sendable 
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
             lock = open(directory.appendingPathComponent("system-proxy.lock").path, O_CREAT | O_RDWR | O_NOFOLLOW, 0o600)
             guard lock >= 0, flock(lock, LOCK_EX | LOCK_NB) == 0 else { throw failure("Another Meshway app owns system-proxy recovery. Close it first.") }
+            ownsLock = true
             if FileManager.default.fileExists(atPath: path.path) {
-                let attrs = try FileManager.default.attributesOfItem(atPath: path.path)
-                guard attrs[.type] as? FileAttributeType == .typeRegular,
-                      (attrs[.ownerAccountID] as? NSNumber)?.uint32Value == getuid(),
-                      (attrs[.posixPermissions] as? NSNumber)?.intValue == 0o600 else { throw failure("The system-proxy recovery file is not a private file owned by this user.") }
-                let data = try Data(contentsOf: path)
-                guard data.count <= 128 * 1024 else { throw failure("The system-proxy recovery file is too large.") }
-                let saved = try JSONDecoder().decode(Journal.self, from: data)
-                guard [1, 2].contains(saved.version), saved.owner == getuid(), saved.remaining.count <= 128,
-                      ["127.0.0.1", "::1"].contains(saved.host), (1...65535).contains(saved.port) else { throw failure("Invalid system-proxy recovery journal. Keep the file and restore your previous settings manually.") }
-                journal = saved; currentRecovery = true
+                journal = try loadJournal(); currentRecovery = true
             }
         } catch { currentError = error.localizedDescription }
         publishState()
     }
-    deinit { if lock >= 0 { _ = flock(lock, LOCK_UN); close(lock) } }
+    deinit { if lock >= 0 { if ownsLock { _ = flock(lock, LOCK_UN) }; close(lock) } }
 
     public func enable(host: String, port: Int) throws {
         defer { publishState() }
-        guard lock >= 0, currentError == nil, journal == nil else { throw failure(currentError ?? "Restore the previous system proxy before enabling it again.") }
+        guard ownsLock, currentError == nil, journal == nil else { throw failure(currentError ?? "Restore the previous system proxy before enabling it again.") }
         guard ["127.0.0.1", "::1"].contains(host), (1...65535).contains(port) else { throw failure("The system proxy must use the local Meshway SOCKS listener.") }
         let output = try runner(["-listallnetworkservices"], false)
         let services = output.split(whereSeparator: \.isNewline).map(String.init).dropFirst().filter { !$0.hasPrefix("*") && !$0.isEmpty }
@@ -147,6 +140,7 @@ public final class SystemProxyController: ObservableObject, @unchecked Sendable 
 
     public func restore() throws {
         defer { publishState() }
+        guard ownsLock else { throw failure("Another Meshway app owns system-proxy recovery. Close it first.") }
         guard var saved = journal else { currentEnabled = false; currentRecovery = false; return }
         var updates: [Update] = []
         for previous in saved.remaining {
@@ -202,6 +196,45 @@ public final class SystemProxyController: ObservableObject, @unchecked Sendable 
     }
     public func restoreAsync() async throws {
         try await withCheckedThrowingContinuation { continuation in operationQueue.async { do { try self.restore(); continuation.resume() } catch { continuation.resume(throwing: error) } } }
+    }
+    /// Resume only this user's fully applied journal and matching live daemon
+    /// endpoint. This reads preferences without authorization or any write.
+    /// The caller must independently verify internet access after resuming.
+    public func resumeOwnAppliedJournalAsync(host: String, port: Int) async -> Bool {
+        await withCheckedContinuation { continuation in
+            operationQueue.async {
+                var resumed = false
+                defer { self.publishState(); continuation.resume(returning: resumed) }
+                guard self.ownsLock, self.journal != nil, !self.currentEnabled,
+                      ["127.0.0.1", "::1"].contains(host), (1...65535).contains(port) else {
+                    return
+                }
+                do {
+                    let saved = try self.loadJournal()
+                    self.journal = saved
+                    guard saved.version == 2, saved.host == host, saved.port == port,
+                          saved.restoring.isEmpty, !saved.remaining.isEmpty else {
+                        return
+                    }
+                    for previous in saved.remaining {
+                        guard let original = previous.originalKeys else { return }
+                        let current = try self.state(for: previous.service)
+                        guard current.enabled, self.owned(current, by: saved), current.originalKeys == original.meshway(host: host, port: port) else {
+                            throw self.failure("System proxy changed outside Meshway. Previous settings remain saved for explicit restoration.")
+                        }
+                    }
+                    guard self.effectiveChecker(host, port) else {
+                        throw self.failure("The active macOS proxy no longer matches this Meshway daemon. Previous settings remain saved for explicit restoration.")
+                    }
+                    self.currentEnabled = true; self.currentRecovery = false
+                    self.currentChangedExternally = false; self.currentError = nil
+                    resumed = true
+                } catch {
+                    self.currentEnabled = false; self.currentRecovery = true
+                    self.currentChangedExternally = true; self.currentError = error.localizedDescription
+                }
+            }
+        }
     }
     /// Observe drift; never reapply over another app or a later user change.
     public func verifyStillAppliedAsync() async -> Bool {
@@ -262,6 +295,20 @@ public final class SystemProxyController: ObservableObject, @unchecked Sendable 
         guard let journal else { return }
         try JSONEncoder().encode(journal).write(to: path, options: .atomic)
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: path.path)
+    }
+    private func loadJournal() throws -> Journal {
+        let attrs = try FileManager.default.attributesOfItem(atPath: path.path)
+        guard attrs[.type] as? FileAttributeType == .typeRegular,
+              (attrs[.ownerAccountID] as? NSNumber)?.uint32Value == getuid(),
+              (attrs[.posixPermissions] as? NSNumber)?.intValue == 0o600 else { throw failure("The system-proxy recovery file is not a private file owned by this user.") }
+        let data = try Data(contentsOf: path)
+        guard data.count <= 128 * 1024 else { throw failure("The system-proxy recovery file is too large.") }
+        let saved = try JSONDecoder().decode(Journal.self, from: data)
+        let names = saved.remaining.map(\.service)
+        guard [1, 2].contains(saved.version), saved.owner == getuid(), names.count <= 128,
+              Set(names).count == names.count, names.allSatisfy({ !$0.isEmpty && !$0.contains("\n") && !$0.contains("\0") }),
+              ["127.0.0.1", "::1"].contains(saved.host), (1...65535).contains(saved.port) else { throw failure("Invalid system-proxy recovery journal. Keep the file and restore your previous settings manually.") }
+        return saved
     }
     private func failure(_ message: String) -> ClientError { .invalidConfiguration(message) }
 
