@@ -1,0 +1,122 @@
+{
+  "status": "PASS",
+  "scope": "full privileged production helper on disposable hosted Mac with loopback encrypted peers/mock DNS",
+  "development_host_modified": false,
+  "checks": {
+    "full_helper_verified_setup": true,
+    "ipv4_virtual_dns_route": true,
+    "ipv6_virtual_dns_route": true,
+    "full_helper_unbound_udp_dns_reply": true,
+    "native_resolver_completed": true,
+    "native_resolver_encrypted_traffic": true,
+    "helper_stopped": true,
+    "stop_request_accepted": true,
+    "journal_inactive": true,
+    "packet_session_inactive": true,
+    "baseline_restored": true
+  },
+  "binary_sha256": "1f55803b9bc2799cd67cc1727cd95dff0a16405c6e267134a72d20d2c4873ba2",
+  "source_commit": "ed6e2c11d9392488d98cdb034f75f82f1508923e",
+  "packet_counters": {
+    "sent_delta": 57,
+    "received_delta": 57
+  },
+  "server_packet_counters": {
+    "sent_delta": 57,
+    "received_delta": 57
+  },
+  "mock_dns_queries_received": 11,
+  "packet_diagnostics": [
+    {
+      "family": 4,
+      "ipv4_header_checksum_valid": true,
+      "meshway_packet_diagnostic": true,
+      "packet_length": 87,
+      "source_is_virtual_client": true,
+      "udp_checksum": 59,
+      "udp_checksum_valid": true,
+      "udp_length": 67
+    }
+  ],
+  "workflow_run_id": 38615087763,
+  "repeated_runs": [
+    {
+      "workflow_run_id": 38615511927,
+      "status": "PASS"
+    },
+    {
+      "workflow_run_id": 38615844359,
+      "status": "PASS"
+    }
+  ],
+  "concurrent_dns_run": {
+    "workflow_run_id": 38616546684,
+    "source_commit": "586c5dfb412431c8389d29f832ccad62b481b1f7",
+    "binary_sha256": "1f55803b9bc2799cd67cc1727cd95dff0a16405c6e267134a72d20d2c4873ba2",
+    "status": "PASS",
+    "checks": {
+      "full_helper_verified_setup": true,
+      "ipv4_virtual_dns_route": true,
+      "ipv6_virtual_dns_route": true,
+      "full_helper_unbound_udp_dns_reply": true,
+      "concurrent_ipv4_ipv6_dns_replies": true,
+      "native_resolver_completed": true,
+      "native_resolver_encrypted_traffic": true,
+      "helper_stopped": true,
+      "stop_request_accepted": true,
+      "journal_inactive": true,
+      "packet_session_inactive": true,
+      "baseline_restored": true
+    },
+    "concurrent_dns": [
+      {
+        "family": 4,
+        "reply": true
+      },
+      {
+        "family": 4,
+        "reply": true
+      },
+      {
+        "family": 4,
+        "reply": true
+      },
+      {
+        "family": 6,
+        "reply": true
+      },
+      {
+        "family": 4,
+        "reply": true
+      },
+      {
+        "family": 4,
+        "reply": true
+      },
+      {
+        "family": 6,
+        "reply": true
+      },
+      {
+        "family": 6,
+        "reply": true
+      },
+      {
+        "family": 6,
+        "reply": true
+      },
+      {
+        "family": 6,
+        "reply": true
+      },
+      {
+        "family": 4,
+        "reply": true
+      },
+      {
+        "family": 6,
+        "reply": true
+      }
+    ]
+  }
+}

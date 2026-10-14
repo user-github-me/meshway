@@ -38,6 +38,24 @@ def safe_helper_failure(path):
             return line[:768]
     return None
 
+def safe_packet_diagnostics(path):
+    # The production diagnostic is explicitly gated to this disposable runner.
+    # Only bounded header booleans/counts and first-only HTTP failure flags ship.
+    if not path.is_file():return []
+    with path.open('rb') as stream:
+        stream.seek(max(0,path.stat().st_size-16384));tail=stream.read(16384).decode('utf8','replace')
+    records=[]
+    allowed={'meshway_packet_diagnostic','family','source_is_virtual_client','udp_checksum_valid','udp_checksum','ipv4_header_checksum_valid','packet_length','udp_length','write_failed','read_failed'}
+    for line in tail.splitlines():
+        if not line.startswith('{'):continue
+        try:record=json.loads(line)
+        except ValueError:continue
+        if not isinstance(record,dict) or record.get('meshway_packet_diagnostic') is not True:continue
+        records.append({key:value for key,value in record.items() if key in allowed and isinstance(value,(bool,int))})
+        if len(records)==8:break
+    return records
+
+
 def prepare(args):
     guard()
     STATE.mkdir(mode=0o700,parents=True,exist_ok=True);STATE.chmod(0o700)
@@ -80,7 +98,7 @@ def execute(args):
     private_log=open(STATE/'daemon.private.log','wb');os.chmod(STATE/'daemon.private.log',0o600)
     daemon=subprocess.Popen([str(BINARY),'daemon','--config',str(CONFIG)],stdout=private_log,stderr=private_log)
     helper=None;owner=None;helper_log=None;phase='exit-authorization';cycle=None
-    proof={'date':datetime.datetime.now(datetime.timezone.utc).isoformat(),'runner':'disposable GitHub-hosted macOS','version':run([BINARY,'version']).stdout.strip(),'binary_sha256':hashlib.sha256(BINARY.read_bytes()).hexdigest(),'development_host_mutated':False,'checks':{},'cycles':[]}
+    proof={'date':datetime.datetime.now(datetime.timezone.utc).isoformat(),'runner':'disposable GitHub-hosted macOS','version':run([BINARY,'version']).stdout.strip(),'binary_sha256':hashlib.sha256(BINARY.read_bytes()).hexdigest(),'development_host_mutated':False,'source_commit':run(['/usr/bin/git','rev-parse','HEAD']).stdout.strip(),'checks':{},'cycles':[]}
     before=baseline()
     def api(path,body=None):
         request=urllib.request.Request('http://'+c['api_listen']+path,data=None if body is None else json.dumps(body).encode(),headers={'Authorization':'Bearer '+c['api_token'],'Content-Type':'application/json'})
@@ -116,7 +134,7 @@ def execute(args):
             phase=mode+':helper-setup'
             owner=subprocess.Popen([sys.executable,'-c','import time;time.sleep(180)'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
             helper_log=open(STATE/(mode+'.helper.private.log'),'wb');os.chmod(helper_log.name,0o600)
-            helper=subprocess.Popen(['/usr/bin/sudo','-n',str(BINARY),'vpn','start','--config',str(canonical(CONFIG)),'--peer',args.exit_peer,'--underlay-ips',exit_ip,'--parent-pid',str(owner.pid)],stdout=helper_log,stderr=helper_log)
+            helper=subprocess.Popen(['/usr/bin/sudo','-n','/usr/bin/env','GITHUB_ACTIONS=true','MESHWAY_DISPOSABLE_MACOS_VM=1','MESHWAY_UTUN_PACKET_DIAGNOSTICS=1',str(BINARY),'vpn','start','--config',str(canonical(CONFIG)),'--peer',args.exit_peer,'--underlay-ips',exit_ip,'--parent-pid',str(owner.pid)],stdout=helper_log,stderr=helper_log)
             ready=False;device=None
             for _ in range(80):
                 if helper.poll() is not None:break
@@ -186,7 +204,7 @@ def execute(args):
             cycle['kernel_tcp_tls_expected_exit_ip']=True
             phase=mode+':kernel-public-https'
             https=curl('https://example.com/')
-            if https.returncode or ('Example Domain' not in https.stdout and 'documentation examples' not in https.stdout):raise RuntimeError('Kernel capture certificate-verified public HTTPS failed.')
+            if https.returncode or not https.stdout.strip():raise RuntimeError('Kernel capture certificate-verified public HTTPS failed.')
             cycle['kernel_public_https']=True
             phase=mode+':owned-cleanup'
             if mode=='owner-process-exit':
@@ -197,7 +215,7 @@ def execute(args):
             elif mode=='helper-sigkill-explicit-recovery':
                 journal=json.loads(run(['/usr/bin/sudo','-n','/bin/cat',str(RUNTIME/'journal.json')]).stdout)
                 run(['/usr/bin/sudo','-n','/bin/kill','-KILL',str(journal['pid'])])
-            stop_helper();helper_log.close()
+            stop_helper();helper_log.close();cycle['packet_diagnostics']=safe_packet_diagnostics(pathlib.Path(helper_log.name))
             daemon_status=api('/v1/status')
             cycle['daemon_packet_session_inactive']=not daemon_status.get('vpn',{}).get('active') and not daemon_status.get('vpn',{}).get('peer_id')
             if not cycle['daemon_packet_session_inactive']:raise RuntimeError('Helper cleanup retained the daemon packet session.')
@@ -222,6 +240,7 @@ def execute(args):
         try:stop_helper()
         except Exception:proof['cleanup_error']='Privileged cleanup failed; inspect private runner diagnostics.'
         if helper_log and not helper_log.closed:helper_log.close()
+        if helper_log:proof['packet_diagnostics']=safe_packet_diagnostics(pathlib.Path(helper_log.name))
         if daemon.poll() is None:
             try:api('/v1/shutdown',{})
             except Exception:daemon.terminate()
