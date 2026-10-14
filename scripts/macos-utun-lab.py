@@ -58,6 +58,7 @@ def execute(args):
     guard()
     exit_ip=str(ipaddress.ip_address(args.exit_ip))
     if not ipaddress.ip_address(exit_ip).is_global:raise RuntimeError('Explicit public exit IP required.')
+    if not 1<=args.exit_port<=65535:raise RuntimeError('Valid explicit exit TCP port required.')
     if not args.exit_peer or any(x.isspace() for x in args.exit_peer):raise RuntimeError('Explicit pinned exit peer required.')
     if not CONFIG.is_file():raise RuntimeError('Prepare the fresh fixture first.')
     c=json.loads(CONFIG.read_text());c.update(upstream_peer=args.exit_peer,bootstrap_peers=[f'/ip4/{exit_ip}/tcp/{args.exit_port}/p2p/{args.exit_peer}'])
@@ -72,7 +73,7 @@ def execute(args):
         with urllib.request.urlopen(request,timeout=5) as response:return json.load(response)
     def stop_helper():
         nonlocal helper,owner
-        if helper and helper.poll() is None:run(['/usr/bin/sudo','-n',BINARY,'vpn','stop','--config',canonical(CONFIG)],check=False)
+        if helper and helper.poll() is None:run(['/usr/bin/sudo','-n',BINARY,'vpn','stop','--config',canonical(CONFIG)],timeout=105,check=False)
         if helper:
             try:helper.wait(timeout=105)
             except subprocess.TimeoutExpired:
@@ -122,11 +123,12 @@ def execute(args):
             if '10.77.0.1' not in dns:raise RuntimeError('Virtual DNS resolver not present in actual macOS configuration.')
             cycle['virtual_dns_resolver_present']=True
             traffic_before=api('/v1/status')
-            import socket
             import uuid
             probe_hostname='meshway-'+uuid.uuid4().hex+'.example.com'
-            try:socket.getaddrinfo(probe_hostname,443,proto=socket.IPPROTO_TCP)
-            except socket.gaierror:pass  # A fresh NXDOMAIN still proves resolver packets crossed the interface.
+            # Run the native resolver in a bounded child; a fresh NXDOMAIN
+            # proves DNS packets crossed the interface without a cached name.
+            lookup=run([sys.executable,'-c','import socket,sys\ntry: socket.getaddrinfo(sys.argv[1],443,proto=socket.IPPROTO_TCP)\nexcept socket.gaierror: pass',probe_hostname],timeout=20,check=False)
+            if lookup.returncode:raise RuntimeError('Bounded native DNS lookup failed.')
             traffic_after_dns=api('/v1/status')
             cycle['native_dns_lookup']=True
             cycle['native_dns_generated_meshway_packet_traffic']=traffic_after_dns.get('bytes_sent',0)>traffic_before.get('bytes_sent',0) and traffic_after_dns.get('bytes_received',0)>traffic_before.get('bytes_received',0)
@@ -173,12 +175,16 @@ def execute(args):
         private_log.close()
         proof['checks']['owned_daemon_stopped']=daemon.poll() is not None
         proof['checks']['final_default_routes_dns_proxy_restored']=baseline()==before
-        proof['checks']['fresh_account_state_removed']=True
+        retry_needed=bool(proof.get('cleanup_error')) or not proof['checks']['final_default_routes_dns_proxy_restored']
+        proof['checks']['fresh_account_state_removed']=not retry_needed
         proof['checks']['temporary_vm_only_network_changes']=True
         # Publish only the bounded proof and public peer request, never config,
-        # private state or logs. The hosted VM is destroyed after the job.
+        # private state or logs. On incomplete cleanup retain the binary and
+        # config privately for the workflow's final Stop attempt; the hosted
+        # VM is destroyed after the job. Artifact paths never include these.
         for file in STATE.iterdir():
             if file.name not in ['client-peer.json','result.json']:
+                if retry_needed and file.name in ['meshway','config.json']:continue
                 if file.is_dir():shutil.rmtree(file)
                 else:file.unlink()
         (STATE/'result.json').write_text(json.dumps(proof,indent=2)+'\n')

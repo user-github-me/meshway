@@ -47,6 +47,7 @@ jobs:
         run: python3 scripts/macos-utun-lab.py --exit-ip "$EXIT_IP" --exit-peer "$EXIT_PEER"
       - name: Final scoped cleanup
         if: always()
+        timeout-minutes: 2
         run: |
           if [ -x .tools/macos-utun-lab/meshway ]; then
             sudo -n .tools/macos-utun-lab/meshway vpn stop --config "$PWD/.tools/macos-utun-lab/config.json" || true
