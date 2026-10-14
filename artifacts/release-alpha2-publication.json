@@ -1,0 +1,55 @@
+{
+  "status": "PASS",
+  "version": "0.1.0-alpha.2",
+  "url": "https://github.com/user-github-me/meshway/releases/tag/v0.1.0-alpha.2",
+  "source_revision": "ab922668adc7a0d7702619c21abfcf96a1e3f863",
+  "ci_run": 38633818636,
+  "all_eight_ci_jobs_passed": true,
+  "assets": 37,
+  "signed_payloads": 35,
+  "publisher_sequence": 2,
+  "expires": "2027-01-13T00:00:00Z",
+  "draft_hash_size_inventory_verified": true,
+  "alpha1_all_38_files_preserved": true,
+  "container": {
+    "status": "PASS",
+    "checked_at": "2026-10-14T20:47:10.216261+00:00",
+    "workflow_run": 38633871057,
+    "version": "0.1.0-alpha.2",
+    "source_revision": "ab922668adc7a0d7702619c21abfcf96a1e3f863",
+    "images": [
+      {
+        "architecture": "amd64",
+        "archive": "meshway-container-linux-amd64.tar.gz",
+        "archive_sha256": "bc3853a430513936dca214d74943cf6d687b232087fe465a76ba05b0cb3c3aa6",
+        "core_sha256": "811f4bace541e06071e89a6f3016ded1992326540babb989526cf7d8affdf111",
+        "source_revision": "ab922668adc7a0d7702619c21abfcf96a1e3f863",
+        "config_digest": "sha256:18ff502d63a1cccf863b9f3114281c7d1d21767f80defc3d6f33d64c64e36907",
+        "notices_match": true,
+        "license_match": true,
+        "unprivileged_user": true,
+        "all_filesystem_layers_digest_verified": true,
+        "manifest_digest": "sha256:d46d1e7a57df005d1f54795c9cb1b509dede17585005f023b1d174b4ea746290"
+      },
+      {
+        "architecture": "arm64",
+        "archive": "meshway-container-linux-arm64.tar.gz",
+        "archive_sha256": "6c5f74cc80e72b4d4a5b9cfd8295ac5925f84af0339d60d98f35446b1a05ebd1",
+        "core_sha256": "619b32df445860b1e53eee629f8b844d9b82e7637c3d5f3c6822a8250049fd4b",
+        "source_revision": "ab922668adc7a0d7702619c21abfcf96a1e3f863",
+        "config_digest": "sha256:ea28de4dcf951a616c5b0f1c130c35176d376b53a139b57ae37f975f9a2f6286",
+        "notices_match": true,
+        "license_match": true,
+        "unprivileged_user": true,
+        "all_filesystem_layers_digest_verified": true,
+        "manifest_digest": "sha256:02e8f2fe4be60f0f7ac9c2f6ad1113ce6d512baab93d9b42977697ec1f7f38d8"
+      }
+    ],
+    "host_network_mutated": false,
+    "image_executed": false,
+    "anonymous_registry_verified": true,
+    "index_digest": "sha256:493a63391f1dd3f9ab1f1d8f1b25c1c4f8068c3a24e6259fbccdba675ecbf006"
+  },
+  "npm_publication": "pending registry browser authorization/verification",
+  "live_personal_gui_replacement": "pending older app proxy restoration"
+}

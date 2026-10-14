@@ -1,6 +1,6 @@
 # Verified status
 
-Meshway is an experimental open-source implementation. Alpha.1 is public; alpha.2 is being packaged with the qualified macOS administrator VPN helper. Source published: https://github.com/user-github-me/meshway. Website live and actual browser-verified: https://user-github-me.github.io/meshway/. Verification performed on 2026-10-14. All eight jobs passed in [CI run 38505614494](https://github.com/user-github-me/meshway/actions/runs/38505614494) at production source `f651571`: core, web, browser, macOS, Apple macOS/iOS packet-provider builds, Android, Windows signed Wintun IPv4/IPv6 kernel TCP and production firewall on an owned adapter, and isolated Linux privileged VPN setup. The earlier temporary validation servers were deleted; one explicitly authorized persistent public relay is now running, as described in PUBLIC_NETWORK.md.
+Meshway is an experimental open-source implementation. Alpha.2 is public with the qualified macOS administrator VPN helper; alpha.1 remains immutable. Source published: https://github.com/user-github-me/meshway. Website live and actual browser-verified: https://user-github-me.github.io/meshway/. Final alpha.2 source `ab922668` passed all eight jobs in [CI run 38633818636](https://github.com/user-github-me/meshway/actions/runs/38633818636). Verification performed on 2026-10-14. All eight jobs passed in [CI run 38505614494](https://github.com/user-github-me/meshway/actions/runs/38505614494) at production source `f651571`: core, web, browser, macOS, Apple macOS/iOS packet-provider builds, Android, Windows signed Wintun IPv4/IPv6 kernel TCP and production firewall on an owned adapter, and isolated Linux privileged VPN setup. The earlier temporary validation servers were deleted; one explicitly authorized persistent public relay is now running, as described in PUBLIC_NETWORK.md.
 
 ## Alpha.2 connection repair
 
@@ -16,7 +16,7 @@ The administrator macOS utun bridge passed real kernel and public internet tests
 
 ## Implemented and exercised
 
-The initial GitHub release is public with 38 assets and 36 signed payloads. Both the GitHub CLI tarball and public npm package passed anonymous download, temporary installation, signed core installation, and rejection of a modified cached executable ([GitHub evidence](../artifacts/published-install-validation.json), [npm evidence](../artifacts/npm-core-install-validation.json)). Published alpha.1 files remain immutable. Subsequent connection-dashboard and unsigned-macOS fixes are being validated for alpha.2; rebuilding source does not update an already published installer.
+The initial GitHub release is public with 38 assets and 36 signed payloads. Both the GitHub CLI tarball and public npm package passed anonymous download, temporary installation, signed core installation, and rejection of a modified cached executable ([GitHub evidence](../artifacts/published-install-validation.json), [npm evidence](../artifacts/npm-core-install-validation.json)). Published alpha.1 files remain immutable. Alpha.2 publishes 37 assets with 35 signed payloads, including the qualified universal macOS administrator VPN and final-tag multiarchitecture containers; rebuilding source does not update an already published installer.
 
 | Area | Evidence |
 | --- | --- |
