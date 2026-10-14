@@ -43,7 +43,7 @@ jobs:
         env:
           RELEASE_TAG: ${{ inputs.tag }}
         run: MESHWAY_RELEASE_VERSION="${RELEASE_TAG#v}" ./scripts/release.sh
-      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-qemu-action@v4
         with:
           platforms: arm64
       - name: Package Linux installers
