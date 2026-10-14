@@ -1,6 +1,6 @@
 # Meshway implementation plan
 
-Meshway is an Apache-2.0 open source peer network with a shared Go networking core, desktop and Android clients, a browser proxy extension, a local dashboard, a public website, and installable server packages. The owner selected Meshway and authorized github.com/user-github-me/meshway publication and temporary Azure validation. Public website deployment uses GitHub Pages; temporary tests do not establish a permanent public network.
+Meshway is an Apache-2.0 open source peer network with a shared Go networking core, desktop, Android and iPhone/iPad clients, a browser proxy extension, a local dashboard, a public website, and installable server packages. The owner selected Meshway and authorized github.com/user-github-me/meshway releases/packages and Azure validation/deployment. The website runs on GitHub Pages, and one bounded encrypted public relay runs in Azure; personal servers and consenting internet exits remain separately operated.
 
 ## Product decisions
 
@@ -57,7 +57,7 @@ Configuration is JSON: identity/state directory; libp2p listen addresses; bootst
 - [x] Small mobile binding API and lifecycle support.
 - [x] Native Android client source and reproducible APK build scripts.
 - [x] Native Apple Network Extension and Windows Wintun/helper source, builds, DNS and failure controls; signed runtime validation remains platform evidence.
-- [x] Swift iOS app, Network Extension provider and entitlement/signing automation; unsigned Xcode builds pass.
+- [x] Swift iPhone/iPad app, Network Extension provider, unsigned developer IPA and entitlement/archive/export automation; unsigned Xcode builds pass.
 
 ### 3 — User-facing apps
 - [x] Real opt-in server catalog, list/map, one-click select/disconnect, and advanced settings.
@@ -71,11 +71,12 @@ Configuration is JSON: identity/state directory; libp2p listen addresses; bootst
 ### 4 — Distribution
 - [x] npm launcher/installer with checksum verification and supported-platform mapping.
 - [x] Multi-stage container source and validated Compose; public multiarch GHCR image anonymously pulled and ARM64 executed.
-- [x] Linux systemd example and setup script (syntax checked; deployment untested).
+- [x] Linux systemd example and setup script; Debian/RPM installation/removal checks and a live hardened Azure systemd relay deployment.
 - [x] Cross-platform binary build and release archive script.
 - [x] CI published; actual core/web/browser/macOS/Android/Windows checks and isolated Linux privileged helper checks pass.
 - [x] Signed publisher metadata, native signing/notarization scripts, verified artifact packaging and release/Pages automation for the authorized repository.
 - [x] Record actual GitHub source/website/container publication and native/kernel CI evidence.
+- [ ] Publish the initial signed GitHub release and verify installation from its public downloads.
 - [ ] Legitimate owner-signed native/store releases and physical-device field gates.
 
 ### 5 — Harden and verify

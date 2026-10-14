@@ -1,0 +1,6 @@
+2026-10-14T03:21:29.9276848Z     device_windows_lab_test.go:238: PASS: actual signed Wintun driver, private IPv4+IPv6 kernel TCP listener, encrypted peer forward/return; owned host routes/firewall removed; no default routes/DNS/proxy changes
+2026-10-14T03:21:31.1837158Z --- PASS: TestWindowsWintunKernelIPv4IPv6EncryptedTCP (9.39s)
+2026-10-14T03:21:31.1837801Z     --- PASS: TestWindowsWintunKernelIPv4IPv6EncryptedTCP/10.73.0.11 (0.00s)
+2026-10-14T03:21:31.1838380Z     --- PASS: TestWindowsWintunKernelIPv4IPv6EncryptedTCP/fd73::11 (0.00s)
+2026-10-14T03:22:10.3051102Z PASS production Windows firewall: actual adapter-scoped filters, kernel UDP blocking/bypass, control protocol filters and cleanup.
+2026-10-14T03:22:10.5562150Z --- PASS: TestWindowsFirewallAdapterFixture (35.97s)

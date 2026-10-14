@@ -1,0 +1,58 @@
+[
+  {
+    "peer": false,
+    "observed": true,
+    "family": 4,
+    "write_error": false,
+    "expected": true
+  },
+  {
+    "peer": false,
+    "observed": true,
+    "family": 6,
+    "write_error": false,
+    "expected": true
+  },
+  {
+    "peer": false,
+    "observed": false,
+    "family": 4,
+    "write_error": false,
+    "expected": false
+  },
+  {
+    "peer": false,
+    "observed": false,
+    "family": 6,
+    "write_error": false,
+    "expected": false
+  },
+  {
+    "peer": true,
+    "observed": true,
+    "family": 4,
+    "write_error": false,
+    "expected": true
+  },
+  {
+    "peer": true,
+    "observed": true,
+    "family": 6,
+    "write_error": false,
+    "expected": true
+  },
+  {
+    "peer": false,
+    "observed": true,
+    "family": 4,
+    "write_error": false,
+    "expected": true
+  },
+  {
+    "peer": false,
+    "observed": true,
+    "family": 6,
+    "write_error": false,
+    "expected": true
+  }
+]

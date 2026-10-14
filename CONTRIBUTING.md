@@ -8,7 +8,7 @@ before implementing them. No separate contributor license agreement is required.
 
 Start with `docs/PLAN.md`, `docs/PROTOCOL.md`, and `docs/THREAT_MODEL.md`. Changes should have a clear user-visible purpose and preserve consent for internet exits, explicit peer authorization, and local-first account data.
 
-Use Go for the shared core, Kotlin for Android, Swift for macOS, C# for Windows, and TypeScript for the web app/extension. Keep private keys, API tokens, state directories, and signing credentials out of Git, screenshots, fixtures, and logs.
+Use Go for the shared core, Kotlin for Android, Swift for macOS/iOS, C# for Windows, and TypeScript for the web app/extension. Keep private keys, API tokens, state directories, and signing credentials out of Git, screenshots, fixtures, and logs.
 
 Run the checks relevant to the change; `scripts/check.sh` aggregates Go vet/race tests, JS tests/builds, core cross compilation, and macOS tests/builds on macOS. Android and Windows have their own native build scripts. Add meaningful behavioral tests for network, parsing, permissions, lifecycle, or synchronization changes.
 
@@ -16,7 +16,8 @@ Prefer small focused changes and explain the trigger, changed behavior, checks, 
 
 Pull requests must pass Go formatting, vet/race tests, vulnerability scanning,
 web/extension/package tests and builds, real browser integration, macOS checks,
-Android builds, and Windows build/runtime checks. Dependency review rejects new
+Apple packet-provider builds, Android builds, Windows build/runtime checks and
+isolated Linux privileged VPN checks. Dependency review rejects new
 high-severity vulnerable dependencies. Reviewers may require isolated behavioral
 tests for routing, DNS, revocation, tunnel loss, reconnection or rollback changes.
 Do not change the development machine's default routes, DNS, active VPN or proxy.

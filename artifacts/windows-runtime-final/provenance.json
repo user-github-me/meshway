@@ -1,0 +1,19 @@
+{
+  "github_job_id": 115662528703,
+  "github_run_id": 38505614494,
+  "job_url": "https://github.com/user-github-me/meshway/actions/runs/38505614494/job/115662528703",
+  "kernel_udp_observations_verified": 8,
+  "production_sources": {
+    "apps/windows/Meshway.VpnHelper/FirewallAddressRanges.cs": {
+      "canonical_sha256": "cb21ae621535cb0ba9ad15b3ad53729575c82abab0e9f10f21acb146c6c53997",
+      "downloaded_sha256": "718cde673cef535ab772bc3ca8e28acc389d91fee245f881ab382616595e2356"
+    },
+    "apps/windows/Meshway.VpnHelper/firewall.ps1": {
+      "canonical_sha256": "8fd3c6c0b76cdebbdd887312474135899f23dfacea2ffdd1dd074c54110de033",
+      "downloaded_sha256": "4354b00fa0ed6acdcf24d3d20509a9b1a764048405c3ac48f22961cc9ebe47ad"
+    }
+  },
+  "scope": "Owned Wintun adapter only; physical interface route/DNS/helper-crash testing is a separate gate.",
+  "source_normalization": "UTF-8 BOM removal and CRLF to LF only",
+  "tested_commit": "f651571c17672e27582672bff0ef3f24463bc9d3"
+}

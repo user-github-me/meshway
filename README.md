@@ -6,7 +6,7 @@ Meshway is an experimental open-source alpha. [Source](https://github.com/user-g
 
 ## Install the alpha
 
-Download Android, macOS, Windows, Linux, browser extensions and Debian/RPM
+Download Android, iPhone/iPad, macOS, Windows, Linux, browser extensions and Debian/RPM
 packages from the [release page](https://github.com/user-github-me/meshway/releases/tag/v0.1.0-alpha.1).
 Release files have an Ed25519-signed manifest; native development signing is
 described alongside each artifact. The public container supports amd64 and arm64:
@@ -66,7 +66,7 @@ Create/export/import use private files and must run while the daemon is stopped.
 ## Platforms and installation
 
 - macOS: native SwiftUI client, bundled Go daemon; `./apps/macos/build.sh` after building the core.
-- iOS: Swift app and Network Extension; `apps/apple/build.sh` with your Apple provisioning profile.
+- iPhone/iPad: SwiftUI app and Network Extension; `./apps/ios/build.sh` creates an unsigned device build. [iOS instructions](apps/ios/README.md) cover the developer IPA and required Apple signing.
 - Windows: C#/WPF client; source/build scripts under `apps/windows`.
 - Linux: native Go daemon, authenticated web dashboard, reversible `meshway vpn start|stop|status` route/DNS/firewall setup.
 - Android: Kotlin client with a Go mobile binding and `VpnService`; `apps/android/build.sh`.

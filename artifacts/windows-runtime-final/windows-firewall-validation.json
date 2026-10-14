@@ -1,0 +1,15 @@
+{
+  "actual_kernel_udp_ipv4_ipv6_block": "PASS",
+  "cleanup_restores_kernel_udp": "PASS",
+  "creation_seconds": 3.3863325,
+  "default_routes_unchanged": true,
+  "dns_unchanged": true,
+  "exact_peer_udp_bypass": "PASS",
+  "ndp_dhcp_control_filters": "PASS",
+  "only_owned_adapter": true,
+  "partial_failure_cleanup": "PASS",
+  "platform": "Windows",
+  "production_firewall_creation": "PASS",
+  "raw_ip_protocol_filters": "PASS",
+  "time": "2026-10-14T03:22:10.2966103Z"
+}
