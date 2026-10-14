@@ -1,0 +1,23 @@
+{
+  "status": "PASS",
+  "checked_at": "2026-10-14T05:36:38.755Z",
+  "name": "@nazifbd/meshway",
+  "version": "0.1.0-alpha.1",
+  "package_url": "https://www.npmjs.com/package/@nazifbd/meshway",
+  "tarball_url": "https://registry.npmjs.org/@nazifbd/meshway/-/meshway-0.1.0-alpha.1.tgz",
+  "tarball_sha256": "3101260714576c022fd5cb1d4c301f1feca7c76e84f9b8ce7be98fbc7b9683b6",
+  "anonymous_download": true,
+  "public_registry_install": true,
+  "source_code_pin_readme_license_identical": true,
+  "launcher_help": true,
+  "install_scripts_disabled": true,
+  "native_core_downloaded": false,
+  "daemon_started": false,
+  "host_network_settings_changed": false,
+  "temporary_package_and_cache_removed": true,
+  "observed_dist_tags": {
+    "latest": "0.1.0-alpha.1",
+    "alpha": "0.1.0-alpha.1"
+  },
+  "latest_tag_removal": "Requires npm browser authentication (EOTP); no change made"
+}

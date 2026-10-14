@@ -2,7 +2,7 @@ name: Native installer validation
 on:
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 jobs:
   windows-installers:
     runs-on: windows-latest
@@ -40,6 +40,14 @@ jobs:
           ./scripts/build-windows-installer.ps1 -Runtime win-arm64
       - name: Install and uninstall x64 payload
         run: ./scripts/windows-installer-lab.ps1
+      - name: Stage verified installers in the existing private release draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $release=gh release view v0.1.0-alpha.1 --json isDraft --jq '.isDraft'
+          if ($LASTEXITCODE -ne 0 -or $release -ne 'true') { throw 'Only the existing private draft release may receive staged installers.' }
+          gh release upload v0.1.0-alpha.1 .tools/release/installers/Meshway-setup-x64.exe .tools/release/installers/Meshway-setup-arm64.exe artifacts/windows-installer-validation.json --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'Private draft installer upload failed.' }
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -1,0 +1,24 @@
+{
+  "uninstall_cleanup": true,
+  "arm64_validation": "Cross-built Inno installer; actual ARM64 installation requires an ARM64 Windows runner.",
+  "platform_signing": "Experimental unsigned application/installer; legitimate Authenticode signing not claimed.",
+  "installer_sha256": "2ee367f5c556a36f2db8fa3aed3ed322d3632d54f64af9d64c30bf1c556ef31e",
+  "payload_file_count": 12,
+  "status": "PASS",
+  "dns_unchanged": true,
+  "exact_installed_payload": true,
+  "routes_unchanged": true,
+  "per_user_install": true,
+  "time": "2026-10-14T05:38:31.0215189Z",
+  "start_menu_and_uninstaller": true,
+  "no_auto_start": true,
+  "private_state_preserved": true,
+  "platform": "Windows x64",
+  "arm64_installer_sha256": "3ccd4ac49230061ccc096ea2846733123f800371dce25fd706839dd5b96e34d2",
+  "provenance": {
+    "run_id": 38517435000,
+    "head_sha": "14461706865378d91c809c91f4fafde7f5d5b559",
+    "source": "Actual Windows GitHub Actions runtime log; install12payloadfiles, uninstallcleanup verified",
+    "downloaded_installers": false
+  }
+}
