@@ -18,7 +18,7 @@ $Binary = Join-Path $Package "meshway-vpn-test.exe"
 if ($LASTEXITCODE -ne 0) { throw "Windows VPN test compilation failed." }
 try {
     $env:MESHWAY_WINDOWS_TUN_LAB = "1"
-    & $Binary -test.run TestWindowsWintunKernelIPv4IPv6EncryptedTCP -test.v -test.timeout 90s
+    & $Binary '-test.run=TestWindowsWintunKernelIPv4IPv6EncryptedTCP' '-test.v' '-test.timeout=90s'
     if ($LASTEXITCODE -ne 0) { throw "Actual Wintun kernel packet validation failed." }
 } finally {
     Remove-Item Env:MESHWAY_WINDOWS_TUN_LAB -ErrorAction SilentlyContinue
