@@ -32,6 +32,9 @@ try:
  dns_script=STATE/'dns-fixture.py'
  dns_script.write_text("import socket\ns=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.bind(('127.0.0.1',53))\nwhile True:\n q,a=s.recvfrom(1500)\n if len(q)<12:continue\n r=bytearray(q);r[2]=0x81;r[3]=0x83;r[6:12]=bytes(6);s.sendto(r,a)\n")
  dns_script.chmod(0o600)
+ dns_counter=STATE/'dns-count.txt'
+ script=dns_script.read_text().replace('while True:',"counter=0\nwhile True:").replace("r=bytearray(q)","counter+=1;open("+repr(str(dns_counter))+",'w').write(str(counter));r=bytearray(q)")
+ dns_script.write_text(script)
  dns_process=subprocess.Popen(['/usr/bin/sudo','-n',sys.executable,str(dns_script)],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
  processes.append((dns_process,open(os.devnull,'wb')))
  time.sleep(.3)
@@ -63,13 +66,15 @@ try:
  for family,target in [('ipv4','10.77.0.1'),('ipv6','fd77::1')]:
   route=lab.run(['/sbin/route','-n','get',*(['-inet6'] if family=='ipv6' else []),target]).stdout
   proof['checks'][family+'_virtual_dns_route']=('interface: '+device in route)
- before_dns=api(client,'/v1/status')
+ before_dns=api(client,'/v1/status');before_server=api(server,'/v1/status')
  s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.settimeout(6)
  q=struct.pack('!HHHHHH',18723,256,1,0,0,0)+b'\x07example\x03com\x00'+struct.pack('!HH',1,1)
  s.sendto(q,('10.77.0.1',53))
  try:a,_=s.recvfrom(1500);proof['checks']['full_helper_unbound_udp_dns_reply']=len(a)>=12 and struct.unpack('!H',a[:2])[0]==18723
  except OSError:proof['checks']['full_helper_unbound_udp_dns_reply']=False
  s.close();after=api(client,'/v1/status');proof['packet_counters']={'sent_delta':after['bytes_sent']-before_dns['bytes_sent'],'received_delta':after['bytes_received']-before_dns['bytes_received']}
+ after_server=api(server,'/v1/status');proof['server_packet_counters']={'sent_delta':after_server['bytes_sent']-before_server['bytes_sent'],'received_delta':after_server['bytes_received']-before_server['bytes_received']}
+ proof['mock_dns_queries_received']=int(dns_counter.read_text()) if dns_counter.exists() else 0
  if not proof['checks']['full_helper_unbound_udp_dns_reply']:raise RuntimeError('full helper UDP DNS has no reply')
  native_before=api(client,'/v1/status')
  p=lab.run([sys.executable,'-c','import socket,sys\ntry:socket.getaddrinfo(sys.argv[1],443)\nexcept socket.gaierror:pass','meshway-'+uuid.uuid4().hex+'.example.com'],timeout=20,check=False)
