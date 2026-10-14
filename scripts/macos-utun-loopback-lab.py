@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Full production macOS helper on disposable hosted VM and local peers only."""
-import pathlib,sys,os,json,time,socket,struct,threading,subprocess,urllib.request,uuid,signal,hashlib
+import pathlib,sys,os,json,time,socket,struct,threading,subprocess,urllib.request,urllib.error,uuid,signal,hashlib
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'scripts'))
 import importlib.util
@@ -15,7 +15,11 @@ proof['source_commit']=os.environ.get('MESHWAY_TESTED_REF','unknown')
 before=lab.baseline()
 def api(c,path,body=None):
  r=urllib.request.Request('http://'+c['api_listen']+path,data=None if body is None else json.dumps(body).encode(),headers={'Authorization':'Bearer '+c['api_token'],'Content-Type':'application/json'})
- with urllib.request.urlopen(r,timeout=5) as f:return json.load(f)
+ try:
+  with urllib.request.urlopen(r,timeout=5) as f:return json.load(f)
+ except urllib.error.HTTPError as e:
+  message=json.loads(e.read(2048)).get('error','control request rejected')
+  raise RuntimeError('local API '+path+' returned '+str(e.code)+': '+str(message)[:512]) from None
 def config(name):
  d=STATE/name;d.mkdir(mode=0o700);p=d/'config.json';lab.run([BINARY,'init','--config',p]);c=json.loads(p.read_text());c.update(listen_addresses=['/ip4/127.0.0.1/tcp/0'],bootstrap_peers=[],socks_listen='',api_listen='127.0.0.1:0',relay=False,exit=False,auto_discovery=False,account_sync=False);return p,c
 def save(p,c):p.write_text(json.dumps(c)+'\n');p.chmod(0o600)
@@ -37,7 +41,7 @@ try:
   s=socket.socket();s.bind(('127.0.0.1',0));n=s.getsockname()[1];s.close();return n
  client['api_listen']='127.0.0.1:'+str(port());server['api_listen']='127.0.0.1:'+str(port());save(cp,client);save(sp,server)
  peer=lab.run([BINARY,'identity','--config',cp]).stdout.strip()
- server.update(exit=True,allow_private_targets=True,allowed_peers=[peer],vpn={'enabled':True,'internet':True,'mtu':1280,'dns_resolver':'127.0.0.1:53'})
+ server.update(exit=True,advertise=True,allow_private_targets=True,allowed_peers=[peer],vpn={'enabled':True,'internet':True,'mtu':1280,'dns_resolver':'127.0.0.1:53'})
  save(sp,server);launch(sp);launch(cp)
  for _ in range(60):
   try:ss=api(server,'/v1/status');cs=api(client,'/v1/status');break
