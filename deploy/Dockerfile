@@ -11,7 +11,7 @@ RUN test -n "$GOSUMDB" && test "$GOSUMDB" != off && go mod download
 COPY cmd ./cmd
 COPY internal ./internal
 COPY pkg ./pkg
-RUN CGO_ENABLED=0 GOOS="${TARGETOS:-linux}" GOARCH="${TARGETARCH:-$(go env GOARCH)}" go build -trimpath -ldflags='-s -w' -o /out/meshway ./cmd/meshway
+RUN CGO_ENABLED=0 GOOS="${TARGETOS:-linux}" GOARCH="${TARGETARCH:-$(go env GOARCH)}" go build -buildvcs=false -trimpath -ldflags='-s -w' -o /out/meshway ./cmd/meshway
 
 FROM ${RUNTIME_IMAGE}
 RUN apk add --no-cache ca-certificates && addgroup -S meshway && adduser -S -G meshway meshway && mkdir -p /var/lib/meshway && chown meshway:meshway /var/lib/meshway

@@ -34,7 +34,7 @@ Actual Android35 arm64 emulator checks passed: install/start/background lifecycl
 
 The Go daemon provides SOCKS5 TCP/UDP, named TCP service tunnels, relays, approved public exits and same-account personal servers. Linux TUN supports IPv4/IPv6 internet packets without NAT/route privileges on the exit: gVisor reoriginates authorized TCP/UDP sockets in userspace. The local client needs explicit TUN/routes/DNS setup or the Linux privileged helper. Server installation supports containers, systemd, Debian/RPM packages and npm launcher downloads. Containers cannot silently configure the development host VPN.
 
-The TypeScript Chrome/Firefox extension configures only a local browser SOCKS proxy. It requires consent and restores owned prior proxy settings. Real isolated Chromium tests cover activation and restoration; Firefox builds but native runtime needs field validation. A public HTTPS website cannot assume browser access to a loopback HTTP control API; the dashboard can be served locally.
+The TypeScript Chrome/Firefox extension configures only a local browser SOCKS proxy. It requires consent and restores owned prior proxy settings. Real isolated Chromium and Firefox 155 tests passed activation, traffic routing, DNS-through-SOCKS and prior proxy restoration. Firefox requires allowing this extension in private windows; missing permission leaves settings unchanged. Store signing/distribution remains separate. A public HTTPS website cannot assume browser access to a loopback HTTP control API; the dashboard can be served locally.
 
 ## Verification
 
