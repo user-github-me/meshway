@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -56,8 +57,23 @@ func TestWindowsWintunKernelIPv4IPv6EncryptedTCP(t *testing.T) {
 	if output, err := windowsLabPowerShell(script); err != nil {
 		t.Fatalf("isolated Windows adapter setup: %v %s", err, output)
 	}
-	// Wait for IPv6 duplicate-address detection to complete on the owned adapter.
-	time.Sleep(1500 * time.Millisecond)
+	// Windows may keep either address tentative until duplicate-address
+	// detection completes. Wait for actual kernel readiness, rather than a
+	// fixed delay that passes on IPv6 while leaving IPv4 unbindable.
+	ready := false
+	for attempt := 0; attempt < 100; attempt++ {
+		query := fmt.Sprintf("$a=@(Get-NetIPAddress -InterfaceAlias '%s' | Where-Object { ($_.IPAddress -eq '10.73.0.11' -or $_.IPAddress -eq 'fd73::11') -and $_.AddressState -eq 'Preferred' }); if ($a.Count -eq 2) { Write-Output 'ready' }", name)
+		out, queryErr := windowsLabPowerShell(query)
+		if queryErr == nil && strings.TrimSpace(string(out)) == "ready" {
+			ready = true
+			break
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	if !ready {
+		out, _ := windowsLabPowerShell(fmt.Sprintf("Get-NetIPAddress -InterfaceAlias '%s' | Format-List IPAddress,AddressState,SkipAsSource", name))
+		t.Fatalf("Wintun addresses never became preferred: %s", out)
+	}
 	client, err := libp2p.New(libp2p.ListenAddrStrings("/ip4/127.0.0.1/tcp/0"))
 	if err != nil {
 		t.Fatal(err)
@@ -211,5 +227,7 @@ func TestWindowsWintunKernelIPv4IPv6EncryptedTCP(t *testing.T) {
 			}
 		})
 	}
-	t.Log("PASS: actual signed Wintun driver, private IPv4+IPv6 kernel TCP listener, encrypted peer forward/return; owned host routes/firewall removed; no default routes/DNS/proxy changes")
+	if !t.Failed() {
+		t.Log("PASS: actual signed Wintun driver, private IPv4+IPv6 kernel TCP listener, encrypted peer forward/return; owned host routes/firewall removed; no default routes/DNS/proxy changes")
+	}
 }
