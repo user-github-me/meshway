@@ -11,7 +11,7 @@
   #define TargetArch "x64"
 #endif
 #ifndef AppVersion
-  #define AppVersion "0.1.0-alpha.1"
+  #define AppVersion "0.1.0-alpha.2"
 #endif
 
 [Setup]

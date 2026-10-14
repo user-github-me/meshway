@@ -10,15 +10,16 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--version',required=True)
     parser.add_argument('--output',type=Path,default=Path('release/native-builds.json'))
+    parser.add_argument('--dist',type=Path,default=Path('dist'),help='Explicit isolated native build directory')
     parser.add_argument('--include-ios',action='store_true',help='Include locally built iOS developer artifacts only when explicitly requested')
     args=parser.parse_args()
-    candidates=[Path('dist/meshway-android-debug.apk'),Path('dist/Meshway.app/Contents/MacOS/Meshway'),Path('dist/Meshway.app/Contents/Resources/meshway')]
+    candidates=[args.dist/'meshway-android-debug.apk',args.dist/'Meshway.app/Contents/MacOS/Meshway',args.dist/'Meshway.app/Contents/Resources/meshway']
     for runtime in ['win-x64','win-arm64']:
         for name in ['Meshway.exe','meshway-daemon.exe','meshway-vpn-helper.exe','wintun.dll','WINTUN-LICENSE.txt']:
-            candidates.append(Path('dist')/('Meshway-'+runtime)/name)
+            candidates.append(args.dist/('Meshway-'+runtime)/name)
     for platform,directory in [('macos','Release'),('ios','Release-iphoneos')]:
         if platform=='ios' and not args.include_ios:continue
-        app=Path('dist')/('apple-'+platform)/'Build/Products'/directory/'Meshway.app'
+        app=args.dist/('apple-'+platform)/'Build/Products'/directory/'Meshway.app'
         if platform=='macos':
             candidates.extend([app/'Contents/MacOS/Meshway',app/'Contents/Resources/meshway',app/'Contents/PlugIns/MeshwayPacketTunnel.appex/Contents/MacOS/MeshwayPacketTunnel'])
         else:

@@ -1,0 +1,68 @@
+name: Native Linux package validation
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Exact source commit to build
+        required: true
+        type: string
+      version:
+        description: Package semantic version
+        required: true
+        default: 0.1.0-alpha.2
+        type: string
+permissions:
+  contents: read
+jobs:
+  linux-packages:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            go_arch: amd64
+            rpm_arch: x86_64
+          - runner: ubuntu-24.04-arm
+            go_arch: arm64
+            rpm_arch: aarch64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    env:
+      PACKAGE_VERSION: ${{ inputs.version }}
+      PACKAGE_ARCH: ${{ matrix.go_arch }}
+      RPM_ARCH: ${{ matrix.rpm_arch }}
+      MESHWAY_DIST_DIR: .tools/linux-package-lab/dist
+      MESHWAY_RELEASE_DIR: .tools/linux-package-lab/packages
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.2'
+      - name: Build native core and real Debian/RPM packages
+        run: |
+          python3 -c 'import os,re; assert re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.]+)?",os.environ["PACKAGE_VERSION"]), "Use a semantic version"'
+          ./scripts/build.sh
+          binary="$MESHWAY_DIST_DIR/bin/meshway-linux-$PACKAGE_ARCH"
+          python3 scripts/package-linux.py --binary "$binary" --version "$PACKAGE_VERSION" --arch "$PACKAGE_ARCH" --output "$MESHWAY_RELEASE_DIR"
+          rpm_version=${PACKAGE_VERSION%%-*}
+          rpm_release=1
+          if [ "$rpm_version" != "$PACKAGE_VERSION" ]; then rpm_release="0.${PACKAGE_VERSION#*-}"; fi
+          ./scripts/package-linux-lab.sh alpine:3.23 "$binary" "$rpm_version" "$RPM_ARCH" "$rpm_release"
+      - name: Install, execute and remove only inside owned distro containers
+        run: |
+          python3 scripts/package-install-lab.py --format deb --image debian:bookworm-slim --package "$MESHWAY_RELEASE_DIR/meshway_${PACKAGE_VERSION}_${PACKAGE_ARCH}.deb" --version "$PACKAGE_VERSION" --output ".tools/linux-package-lab/deb-$PACKAGE_ARCH.json"
+          rpm_package=$(find "$MESHWAY_RELEASE_DIR" -maxdepth 1 -name "*.$RPM_ARCH.rpm" -print -quit)
+          test -n "$rpm_package"
+          python3 scripts/package-install-lab.py --format rpm --image fedora:44 --package "$rpm_package" --version "$PACKAGE_VERSION" --output ".tools/linux-package-lab/rpm-$PACKAGE_ARCH.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: linux-packages-${{ matrix.go_arch }}
+          path: |
+            .tools/linux-package-lab/packages/*.deb
+            .tools/linux-package-lab/packages/*.rpm
+            .tools/linux-package-lab/*.json
+          include-hidden-files: true
+          if-no-files-found: error

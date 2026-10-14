@@ -10,10 +10,46 @@
         <Button x:Name="StopButton" Content="Stop" Click="StopClicked" Padding="18,8" Margin="0,0,8,0" IsEnabled="False" />
         <Button Content="Refresh" Click="RefreshClicked" Padding="18,8" />
       </StackPanel>
-      <TextBox x:Name="StatusText" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Consolas" MinHeight="110" Margin="0,0,0,20" />
+      <GroupBox Header="Connection mode" Padding="12" Margin="0,0,0,18">
+        <StackPanel>
+          <ComboBox x:Name="ConnectionMode" SelectedIndex="0" SelectionChanged="ConnectionModeChanged" Margin="0,0,0,10">
+            <ComboBoxItem Content="VPN · protect all apps" />
+            <ComboBoxItem Content="SOCKS · connect chosen apps" />
+            <ComboBoxItem Content="Personal tunnel · use your own server" />
+          </ComboBox>
+          <TextBlock x:Name="ModeDescription" Text="VPN routes IPv4, IPv6 and DNS through an approved server. Choose a server below to connect; Windows asks for administrator consent." TextWrapping="Wrap" Foreground="#586575" />
+          <TextBlock x:Name="ConnectionSummary" Text="Start Meshway to see live connection status." TextWrapping="Wrap" FontWeight="SemiBold" Margin="0,10,0,0" />
+          <TextBlock x:Name="TrafficSummary" Text="Traffic: —" TextWrapping="Wrap" Foreground="#586575" Margin="0,8,0,0" />
+        </StackPanel>
+      </GroupBox>
+      <Expander Header="Connection details" Margin="0,0,0,18"><TextBox x:Name="StatusText" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Consolas" MinHeight="110" /></Expander>
+      <GroupBox x:Name="TunnelPanel" Header="Personal server connection" Padding="12" Margin="0,0,0,18" Visibility="Collapsed">
+        <StackPanel>
+          <TextBlock Text="Your personal server accepts devices enrolled with your recovery key. Choose it below to connect the Meshway SOCKS proxy. SSH is a transport to that same Meshway server; device VPN capture is a separate choice." TextWrapping="Wrap" Foreground="#586575" Margin="0,0,0,12" />
+          <CheckBox x:Name="PersonalDeviceVPN" Content="Protect all apps through your personal server" IsChecked="True" Margin="0,0,0,10" />
+          <CheckBox x:Name="UseSSH" Content="Wrap the Meshway connection in SSH" Margin="0,0,0,10" />
+          <TextBlock Text="SSH host alias from your existing OpenSSH configuration" /><TextBox x:Name="SSHAlias" Margin="0,4,0,8" />
+          <TextBlock Text="Your server's pinned Meshway peer ID" /><TextBox x:Name="SSHPeer" Margin="0,4,0,8" />
+          <DockPanel Margin="0,0,0,8"><StackPanel DockPanel.Dock="Left" Width="250"><TextBlock Text="Local loopback port" /><TextBox x:Name="SSHLocalPort" Text="44001" Margin="0,4,12,0" /></StackPanel><StackPanel><TextBlock Text="Server loopback Meshway port" /><TextBox x:Name="SSHRemotePort" Text="44001" Margin="0,4,0,0" /></StackPanel></DockPanel>
+          <Button x:Name="SaveSSHButton" Content="Save personal transport" Click="SaveSSHClicked" HorizontalAlignment="Left" Padding="14,7" Margin="0,0,0,10" />
+          <TextBlock x:Name="TransportSummary" Text="Direct Meshway transport" TextWrapping="Wrap" Foreground="#586575" Margin="0,0,0,12" />
+          <TextBlock Text="SSH uses your system OpenSSH, existing agent/configuration and verified known host. Stop Meshway before saving. Passwords and private keys are never entered here. This build uses SOCKS capture with SSH; full-device SSH VPN requires an additional endpoint bypass." TextWrapping="Wrap" Foreground="#586575" Margin="0,0,0,12" />
+          <Expander Header="Advanced tools · TCP service tunnels">
+          <StackPanel>
+          <TextBlock Text="Open a local port to a named service shared by a trusted peer. Tunnels start with Meshway; they do not change this device's VPN or DNS." TextWrapping="Wrap" Foreground="#586575" Margin="0,0,0,12" />
+          <StackPanel x:Name="TunnelList" />
+          <TextBlock Text="Tunnel name" /><TextBox x:Name="TunnelName" Text="my-service" Margin="0,4,0,8" />
+          <TextBlock Text="Local listener" /><TextBox x:Name="TunnelListen" Text="127.0.0.1:8081" Margin="0,4,0,8" />
+          <TextBlock Text="Server peer ID" /><TextBox x:Name="TunnelPeer" Margin="0,4,0,8" />
+          <TextBlock Text="Shared service name" /><TextBox x:Name="TunnelService" Text="web" Margin="0,4,0,8" />
+          <Button x:Name="AddTunnelButton" Content="Save tunnel" Click="AddTunnelClicked" HorizontalAlignment="Left" Padding="14,7" />
+          <TextBlock Text="Stop Meshway before changing tunnels. Ask the server owner for the service name and approval; saved listeners appear here after starting." TextWrapping="Wrap" Foreground="#586575" Margin="0,10,0,0" />
+          </StackPanel>
+          </Expander>
+        </StackPanel>
+      </GroupBox>
       <GroupBox Header="Servers" Padding="12" Margin="0,0,0,18">
         <StackPanel>
-          <CheckBox x:Name="DeviceVPNMode" Content="Protect this device with VPN" IsChecked="True" Margin="0,0,0,12" />
           <TextBlock x:Name="CatalogMessage" Text="Start Meshway to see available servers." Foreground="#586575" TextWrapping="Wrap" Margin="0,0,0,12" />
           <Button Content="Disconnect" Click="DisconnectClicked" HorizontalAlignment="Left" Padding="14,7" Margin="0,0,0,12" />
           <StackPanel x:Name="ServerList" />

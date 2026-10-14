@@ -11,7 +11,10 @@ if (process.platform === 'win32') throw new Error('Run this npm-prefix validatio
 const root = fileURLToPath(new URL('../', import.meta.url));
 const { verifyRelease } = await import(pathToFileURL(resolve(root, 'packages/cli/src/release.js')));
 const sha = data => createHash('sha256').update(data).digest('hex');
-const base = 'https://github.com/user-github-me/meshway/releases/download/v0.1.0-alpha.1/';
+const releaseVersion=process.argv[2] ?? '0.1.0-alpha.1';
+const releaseSequence=Number(process.argv[3] ?? '1');
+if (!/^\d+\.\d+\.\d+-alpha\.\d+$/.test(releaseVersion) || !Number.isSafeInteger(releaseSequence) || releaseSequence<1) throw new Error('Use explicit alpha release version and positive publisher sequence');
+const base = `https://github.com/user-github-me/meshway/releases/download/v${releaseVersion}/`;
 async function get(name, limit) {
   let url = new URL(name, base);
   for (let index = 0; index <= 5; index++) {
@@ -47,7 +50,7 @@ try {
   const signature = await get('RELEASE.json.sig', 64);
   const pin = await readFile(join(root, 'config/release-public.pem'), 'utf8');
   const manifest = verifyRelease(metadata, signature, pin);
-  if (manifest.version !== '0.1.0-alpha.1' || manifest.sequence !== 1) throw new Error('Unexpected signed release');
+  if (manifest.version !== releaseVersion || manifest.sequence !== releaseSequence) throw new Error('Unexpected signed release');
   const name = 'meshway-cli-0.1.0.tgz';
   const tarball = await get(name, 2 * 1024 * 1024);
   if (sha(tarball) !== manifest.files[name]) throw new Error('CLI tarball publisher checksum mismatch');
@@ -58,9 +61,9 @@ try {
   const env = { ...process.env, MESHWAY_CACHE_DIR: join(temporary, 'cache') };
   delete env.MESHWAY_BINARY;
   const cli = join(packageRoot, 'bin/meshway.js');
-  run(process.execPath, [cli, 'install-core'], env);
+  run(process.execPath, [cli, 'install-core', '--release-base', base, '--version', releaseVersion], env);
   const version = run(process.execPath, [cli, 'version'], env);
-  if (version !== 'Meshway 0.1.0-alpha.1') throw new Error('Installed core version mismatch');
+  if (version !== `Meshway ${releaseVersion}`) throw new Error('Installed core version mismatch');
   const { binaryName, verifyCachedCore } = await import(pathToFileURL(join(packageRoot, 'src/installer.js')));
   const binary = binaryName();
   const cached = join(env.MESHWAY_CACHE_DIR, binary);
@@ -72,7 +75,7 @@ try {
   await writeFile(cached, Buffer.concat([contents, Buffer.from('tamper')]));
   const rejected = spawnSync(process.execPath, [cli, 'version'], { encoding: 'utf8', env, timeout: 20_000 });
   if (rejected.status !== 1 || !rejected.stderr.includes('Cached core checksum changed')) throw new Error('Changed cached core was not rejected');
-  result = { status: 'PASS', checked_at: new Date().toISOString(), repository: 'user-github-me/meshway', version, metadata_sha256: sha(metadata), signed_file_count: Object.keys(manifest.files).length, package_sha256: sha(tarball), core: binary, core_sha256: sha(contents), source_publisher_pin: true, github_tarball_installed_locally: true, explicit_default_core_install: true, signed_notices: true, cached_tamper_rejected_before_execution: true, host_routing_dns_proxy_changes: false };
+  result = { status: 'PASS', checked_at: new Date().toISOString(), repository: 'user-github-me/meshway', version, metadata_sha256: sha(metadata), signed_file_count: Object.keys(manifest.files).length, package_sha256: sha(tarball), core: binary, core_sha256: sha(contents), source_publisher_pin: true, github_tarball_installed_locally: true, explicit_signed_version_install: true, signed_notices: true, cached_tamper_rejected_before_execution: true, host_routing_dns_proxy_changes: false };
 } finally {
   await rm(temporary, { recursive: true, force: true });
 }

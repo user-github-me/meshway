@@ -1,6 +1,20 @@
 name: Native installer validation
 on:
   workflow_dispatch:
+    inputs:
+      ref:
+        description: Exact commit or existing tag to build and validate
+        required: true
+        type: string
+      version:
+        description: Installer semantic version
+        required: true
+        default: 0.1.0-alpha.2
+        type: string
+      draft_tag:
+        description: Optional existing private draft tag to receive verified installers
+        required: false
+        type: string
 permissions:
   contents: write
 jobs:
@@ -9,6 +23,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
@@ -30,23 +46,28 @@ jobs:
           }
           Remove-Item Env:GOARCH
       - name: Compile Inno Setup installers
+        env:
+          INSTALLER_VERSION: ${{ inputs.version }}
         run: |
           $compiler=Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6/ISCC.exe'
           if (!(Test-Path -LiteralPath $compiler)) {
             choco install innosetup --no-progress -y
             if ($LASTEXITCODE -ne 0) { throw 'Inno Setup installation failed' }
           }
-          ./scripts/build-windows-installer.ps1 -Runtime win-x64
-          ./scripts/build-windows-installer.ps1 -Runtime win-arm64
+          ./scripts/build-windows-installer.ps1 -Runtime win-x64 -AppVersion $env:INSTALLER_VERSION
+          ./scripts/build-windows-installer.ps1 -Runtime win-arm64 -AppVersion $env:INSTALLER_VERSION
       - name: Install and uninstall x64 payload
         run: ./scripts/windows-installer-lab.ps1
-      - name: Stage verified installers in the existing private release draft
+      - name: Stage verified installers in an explicitly selected private release draft
+        if: inputs.draft_tag != ''
         env:
           GH_TOKEN: ${{ github.token }}
+          DRAFT_TAG: ${{ inputs.draft_tag }}
         run: |
-          $release=gh release view v0.1.0-alpha.1 --json isDraft --jq '.isDraft'
+          if ($env:DRAFT_TAG -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.]+)?$') { throw 'Invalid draft tag.' }
+          $release=gh release view $env:DRAFT_TAG --json isDraft --jq '.isDraft'
           if ($LASTEXITCODE -ne 0 -or $release -ne 'true') { throw 'Only the existing private draft release may receive staged installers.' }
-          gh release upload v0.1.0-alpha.1 .tools/release/installers/Meshway-setup-x64.exe .tools/release/installers/Meshway-setup-arm64.exe artifacts/windows-installer-validation.json --clobber
+          gh release upload $env:DRAFT_TAG .tools/release/installers/Meshway-setup-x64.exe .tools/release/installers/Meshway-setup-arm64.exe artifacts/windows-installer-validation.json --clobber
           if ($LASTEXITCODE -ne 0) { throw 'Private draft installer upload failed.' }
       - uses: actions/upload-artifact@v4
         if: always()

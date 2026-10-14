@@ -1,14 +1,17 @@
 param(
     [ValidateSet("win-x64", "win-arm64")][string]$Runtime = "win-x64",
     [string]$Daemon = "",
-    [string]$Wintun = ""
+    [string]$Wintun = "",
+    [string]$Output = "",
+    [string]$AppVersion = "0.1.0-alpha.2"
 )
 $ErrorActionPreference = "Stop"
 $ProjectRoot = Resolve-Path (Join-Path $PSScriptRoot "../..")
-$Output = Join-Path $ProjectRoot "dist/Meshway-$Runtime"
-dotnet publish (Join-Path $PSScriptRoot "Meshway/Meshway.csproj") -c Release -r $Runtime --self-contained true -p:PublishSingleFile=true -o $Output
+if (!$Output) { $Output = Join-Path $ProjectRoot "dist/Meshway-$Runtime" }
+if ($AppVersion -notmatch '^\d+\.\d+\.\d+(-[A-Za-z0-9.]+)?$') { throw 'Use an explicit semantic app version' }
+dotnet publish (Join-Path $PSScriptRoot "Meshway/Meshway.csproj") -c Release -r $Runtime --self-contained true -p:PublishSingleFile=true "-p:Version=$AppVersion" -o $Output
 if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed" }
-dotnet publish (Join-Path $PSScriptRoot "Meshway.VpnHelper/Meshway.VpnHelper.csproj") -c Release -r $Runtime --self-contained true -p:PublishSingleFile=true -o $Output
+dotnet publish (Join-Path $PSScriptRoot "Meshway.VpnHelper/Meshway.VpnHelper.csproj") -c Release -r $Runtime --self-contained true -p:PublishSingleFile=true "-p:Version=$AppVersion" -o $Output
 if ($LASTEXITCODE -ne 0) { throw "VPN helper publish failed" }
 if (-not $Daemon) {
     $Arch = if ($Runtime -eq "win-arm64") { "arm64" } else { "amd64" }

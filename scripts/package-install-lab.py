@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import subprocess
 import uuid
+from urllib.parse import urlsplit
 
 
 def run(*args):
@@ -24,19 +25,31 @@ def main():
     parser.add_argument('--package',required=True,type=Path)
     parser.add_argument('--version',default='0.1.0-alpha.1')
     parser.add_argument('--output',type=Path)
+    parser.add_argument('--debian-mirror',help='Explicit HTTPS Debian mirror root; repository signature verification remains enabled')
+    parser.add_argument('--ca-bundle',type=Path,help='Explicit trusted PEM CA bundle copied only into the disposable container')
     args=parser.parse_args()
+    if args.ca_bundle and (not args.ca_bundle.is_file() or args.ca_bundle.stat().st_size>2*1024*1024 or b'-----BEGIN CERTIFICATE-----' not in args.ca_bundle.read_bytes()):
+        parser.error('Use an explicit bounded public PEM certificate bundle')
+    if args.debian_mirror:
+        url=urlsplit(args.debian_mirror)
+        if args.format!='deb' or url.scheme!='https' or not url.hostname or url.username or url.password or url.query or url.fragment or any(c in args.debian_mirror for c in "'\n\r@&\\") or not all(c.isalnum() or c in ":/._-" for c in args.debian_mirror):
+            parser.error('Use an explicit credential-free HTTPS Debian mirror root for a Debian lab')
     if not args.package.is_file():parser.error('Package must exist')
     if not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.]+)?',args.version):parser.error('Use a semantic version')
     output=args.output or Path('artifacts')/f'{args.format}-install-validation.json'
     name='meshway-package-lab-'+uuid.uuid4().hex[:10]
     result={'format':args.format,'image':args.image,'package':args.package.name,'package_sha256':hashlib.sha256(args.package.read_bytes()).hexdigest(),'version':args.version,'checked_at':datetime.datetime.now(datetime.timezone.utc).isoformat()}
     if args.format=='deb':
-        install='apt-get update >/dev/null && DEBIAN_FRONTEND=noninteractive apt-get install -y /package.deb'
+        install='apt-get -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -o Acquire::Retries=1 update >/dev/null && DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -o Acquire::Retries=1 install -y /package.deb'
+        if args.debian_mirror:
+            install=f"sed -i 's@http://deb.debian.org@{args.debian_mirror.rstrip('/')}@g' /etc/apt/sources.list.d/debian.sources\n"+install
+        if args.ca_bundle:
+            install='mkdir -p /etc/ssl/certs; cp /meshway-ca.pem /etc/ssl/certs/ca-certificates.crt\n'+install
         installed='dpkg-query -W meshway >/dev/null'
         remove='dpkg --remove meshway >/dev/null'
         extension='deb'
     else:
-        install='dnf install -y /package.rpm'
+        install='dnf --setopt=timeout=20 --setopt=retries=1 install -y /package.rpm'
         installed='rpm -q meshway >/dev/null'
         remove='rpm -e meshway >/dev/null'
         extension='rpm'
@@ -67,6 +80,8 @@ echo PACKAGE_INSTALL_REMOVE_PASS
         # Network/DNS/route changes and distro dependencies remain container-local.
         run('docker','create','--name',name,'--user','0:0','--entrypoint','/bin/sh',args.image,'-c',script)
         run('docker','cp',str(args.package.resolve()),name+':/package.'+extension)
+        if args.ca_bundle:
+            run('docker','cp',str(args.ca_bundle.resolve()),name+':/meshway-ca.pem')
         # A fixed internal package path avoids exposing the entire release/state directory.
         run('docker','start',name)
         exit_code=run('docker','wait',name).strip()

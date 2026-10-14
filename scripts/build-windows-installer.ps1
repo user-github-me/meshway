@@ -2,9 +2,11 @@ param(
     [ValidateSet('win-x64','win-arm64')][string]$Runtime='win-x64',
     [string]$Package='',
     [string]$Output='.tools/release/installers',
-    [string]$Compiler=''
+    [string]$Compiler='',
+    [string]$AppVersion='0.1.0-alpha.2'
 )
 $ErrorActionPreference='Stop'
+if ($AppVersion -notmatch '^\d+\.\d+\.\d+(-[A-Za-z0-9.]+)?$') { throw 'Use an explicit semantic app version' }
 $root=(Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 if (!$Package) { $Package=Join-Path $root "dist/Meshway-$Runtime" }
 $packagePath=(Resolve-Path $Package).Path
@@ -22,7 +24,7 @@ if (!$Compiler) {
     }
 }
 $arch=if ($Runtime -eq 'win-arm64') {'arm64'} else {'x64'}
-& $Compiler "/DPayloadDir=$packagePath" "/DOutputDir=$outputPath" "/DTargetArch=$arch" '/DAppVersion=0.1.0-alpha.1' (Join-Path $root 'apps/windows/installer.iss')
+& $Compiler "/DPayloadDir=$packagePath" "/DOutputDir=$outputPath" "/DTargetArch=$arch" "/DAppVersion=$AppVersion" (Join-Path $root 'apps/windows/installer.iss')
 if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compile failed' }
 $installer=Join-Path $outputPath "Meshway-setup-$arch.exe"
 if (!(Test-Path -LiteralPath $installer)) { throw 'Installer output missing' }

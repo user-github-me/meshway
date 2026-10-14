@@ -6,11 +6,11 @@ import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const config = JSON.parse(await readFile(join(root, 'config/npm-publication.json'), 'utf8'));
-if (config.name !== '@nazifbd/meshway' || config.version !== '0.1.0-alpha.1' || config.tag !== 'alpha' || config.access !== 'public' || config.registry !== 'https://registry.npmjs.org/') throw new Error('Unexpected npm publication destination');
+if (config.name !== '@nazifbd/meshway' || !/^\d+\.\d+\.\d+-alpha\.\d+$/.test(config.version) || config.tag !== 'alpha' || config.access !== 'public' || config.registry !== 'https://registry.npmjs.org/') throw new Error('Unexpected npm publication destination');
 const source = join(root, 'packages/cli');
 const original = JSON.parse(await readFile(join(source, 'package.json'), 'utf8'));
 const manifest = { ...original, name: config.name, version: config.version, repository: { type: 'git', url: config.repository }, homepage: config.homepage, bugs: { url: config.bugs }, publishConfig: { access: config.access, tag: config.tag, registry: config.registry } };
-const output = join(root, '.tools/release/npm-registry');
+const output = join(root, '.tools/release/npm-registry', config.version);
 await mkdir(output, { recursive: true });
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 function run(command, args, cwd) {
