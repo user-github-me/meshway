@@ -80,7 +80,16 @@ final class AppModel: ObservableObject {
     var deviceVPNAvailable: Bool { AppleVPNController.sharedContainer != nil || nativeVPN.available }
     var selectedPeer: String { !requestedPeer.isEmpty ? requestedPeer : status?.upstream_peer.isEmpty == false ? status!.upstream_peer : configuration.upstreamPeer }
     var activeSelection: Bool { status?.upstream_peer.isEmpty == false && !explicitDisconnected }
-    var shouldDisconnect: Bool { activeVPN || (systemProxy.enabled && internetVerified) }
+    var needsVPNRecovery: Bool { nativeVPN.state == .recoveryRequired }
+    var shouldDisconnect: Bool { activeVPN || (!deviceVPN && systemProxy.enabled && internetVerified) }
+    var connectionActionTitle: String { needsVPNRecovery ? "Restore networking" : shouldDisconnect ? "Disconnect" : "Connect" }
+    var vpnUnavailableMessage: String { "Internet VPN is unavailable in this build. Use a build with a validated administrator helper or an Apple-signed packet extension. SOCKS and personal tunnels remain available." }
+    var connectionExplanation: String {
+        if deviceVPN && nativeVPN.available {
+            return "Route IPv4, IPv6 and DNS through your selected server. macOS asks for administrator authorization; Disconnect restores the networking changes owned by Meshway."
+        }
+        return connectionMode.explanation
+    }
     var selectedServer: Server? { servers.first { $0.peer_id == selectedPeer } }
     var selectedServerName: String {
         if let server = selectedServer, !server.label.isEmpty { return server.label }
@@ -90,14 +99,20 @@ final class AppModel: ObservableObject {
     var activeVPN: Bool { [.connected, .connecting, .reasserting].contains(vpn.status) || nativeVPN.active }
 
     func chooseMode(_ mode: ConnectionMode) {
-        guard !busy, !activeVPN, mode != .internetVPN || deviceVPNAvailable else { return }
+        guard !busy, !activeVPN, !needsVPNRecovery, mode != .internetVPN || deviceVPNAvailable else { return }
         connectionMode = mode
         UserDefaults.standard.set(mode.rawValue, forKey: "connectionMode")
     }
 
     func toggleConnection() async {
-        if activeVPN || nativeVPN.state == .recoveryRequired { await disconnect(); return }
-        if systemProxy.enabled && internetVerified { await disconnect(); return }
+        if needsVPNRecovery {
+            guard !busy else { return }
+            busy = true; defer { busy = false }
+            if await restoreDeviceVPN() { message = "Meshway’s device VPN networking was restored. Click Connect to retry." }
+            return
+        }
+        if activeVPN { await disconnect(); return }
+        if !deviceVPN && systemProxy.enabled && internetVerified { await disconnect(); return }
         if connectionMode == .personalTunnel, !configuration.personalTransportEnabled, !configuration.bootstrapPeers.contains(where: { $0.hasPrefix("/ip4/127.0.0.1/tcp/") }) {
             error = "Configure your personal server’s SSH alias and pinned peer in Settings first."; return
         }
@@ -119,7 +134,7 @@ final class AppModel: ObservableObject {
             await refresh()
         }
         if connectionMode == .internetVPN {
-            guard deviceVPNAvailable else { error = "Internet VPN requires legitimate Apple signing and Network Extension entitlements."; return }
+            guard deviceVPNAvailable else { error = vpnUnavailableMessage; return }
             guard let server = selectedServer else { error = "Choose an available internet exit in Servers first."; return }
             await selectServer(server)
         } else if let server = selectedServer, !peerConnected {
@@ -524,7 +539,7 @@ final class AppModel: ObservableObject {
     }
 
     func selectServer(_ server: Server) async {
-        guard !busy else { return }
+        guard !busy, !activeVPN, !needsVPNRecovery else { return }
         requestedPeer = server.peer_id
         message = "Connecting to \(server.label.isEmpty ? "your server" : server.label)…"
         error = nil
@@ -532,7 +547,7 @@ final class AppModel: ObservableObject {
         defer { busy = false }
         do {
             if deviceVPN {
-                guard deviceVPNAvailable else { throw ClientError.invalidConfiguration("Apple signing is required for Internet VPN. SOCKS and personal tunnels work without device VPN privileges.") }
+                guard deviceVPNAvailable else { throw ClientError.invalidConfiguration(vpnUnavailableMessage) }
                 guard await restoreSystemProxy() else { return }
                 if nativeVPN.available {
                     try await DaemonAPI(configuration:configuration).select(server:server)
@@ -562,7 +577,8 @@ final class AppModel: ObservableObject {
             await refresh()
         } catch {
             technicalError = error.localizedDescription
-            self.error = configuration.personalTransportEnabled || server.address.hasPrefix("/ip4/127.0.0.1/") ? "Your private SSH connection is offline. Reconnect your personal server, then click Connect again." : "Could not connect to this server. Check that it is online and your device is approved."
+            if deviceVPN { self.error = "Device VPN could not start. " + error.localizedDescription }
+            else { self.error = configuration.personalTransportEnabled || server.address.hasPrefix("/ip4/127.0.0.1/") ? "Your private SSH connection is offline. Reconnect your personal server, then click Connect again." : "Could not connect to this server. Check that it is online and your device is approved." }
         }
     }
 
@@ -584,7 +600,7 @@ final class AppModel: ObservableObject {
     }
 
     var canEnableSystemProxy: Bool {
-        status != nil && peerConnected && (status?.transport?.kind != "ssh" || status?.transport?.authenticated == true) && selectedServer?.can_connect == true && selectedServer?.roles.exit == true && !activeVPN && !deviceVPN && !(status?.socks_listen.isEmpty ?? true)
+        status != nil && peerConnected && (status?.transport?.kind != "ssh" || status?.transport?.authenticated == true) && selectedServer?.can_connect == true && selectedServer?.roles.exit == true && !activeVPN && !needsVPNRecovery && !deviceVPN && !(status?.socks_listen.isEmpty ?? true)
     }
 
     private func resumeExistingSystemProxy(for live: DaemonStatus) async {
@@ -771,7 +787,7 @@ enum ConnectionMode: String, CaseIterable, Identifiable {
     }
     var explanation: String {
         switch self {
-        case .internetVPN: return "Route IPv4, IPv6 and DNS through an approved Meshway exit using the native packet extension."
+        case .internetVPN: return "Route IPv4, IPv6 and DNS through an approved Meshway exit using native device VPN."
         case .socks: return "Connect your browser or another app to the local SOCKS5 address. Meshway encrypts traffic to your selected server."
         case .personalTunnel: return "Use your own same-account Meshway server through a private SSH connection. Applications connect through the local SOCKS5 address."
         }
@@ -842,8 +858,9 @@ struct ContentView: View {
     private var connected: Bool { model.connectionMode == .internetVPN ? vpn.status == .connected || nativeVPN.state == .connected : model.peerConnected && (model.status?.transport?.kind != "ssh" || model.status?.transport?.authenticated == true) && model.systemProxy.enabled && model.internetVerified }
     private var connectionTitle: String {
         if model.busy { return "Working on your connection…" }
+        if model.needsVPNRecovery { return "Device VPN cleanup needs attention" }
         if model.connectionMode == .internetVPN {
-            if !model.deviceVPNAvailable { return "Apple signing required" }
+            if !model.deviceVPNAvailable { return "Device VPN unavailable in this build" }
             if nativeVPN.state == .authorizing { return "Waiting for macOS authorization" }
             if nativeVPN.state == .connecting { return "Configuring device VPN" }
             if nativeVPN.state == .connected { return "Device VPN capture active" }
@@ -959,20 +976,20 @@ struct ContentView: View {
                         }
                         Spacer()
                         Button { Task { await model.toggleConnection() } } label: {
-                            HStack(spacing: 8) { if model.busy { ProgressView().controlSize(.small) } else { Image(systemName: model.shouldDisconnect ? "power" : "bolt.fill") }; Text(model.shouldDisconnect ? "Disconnect" : "Connect").fontWeight(.semibold) }.padding(.horizontal, 23).padding(.vertical, 14)
+                            HStack(spacing: 8) { if model.busy { ProgressView().controlSize(.small) } else { Image(systemName: model.needsVPNRecovery ? "arrow.uturn.backward" : model.shouldDisconnect ? "power" : "bolt.fill") }; Text(model.connectionActionTitle).fontWeight(.semibold) }.padding(.horizontal, 23).padding(.vertical, 14)
                                 .foregroundStyle(MeshwayTheme.background).background(MeshwayTheme.accent, in: RoundedRectangle(cornerRadius: 12)).contentShape(RoundedRectangle(cornerRadius: 12))
                         }
                         .buttonStyle(FullCardButtonStyle())
-                        .disabled(model.busy || (model.connectionMode == .internetVPN && !model.deviceVPNAvailable))
+                        .disabled(model.busy || (model.connectionMode == .internetVPN && !model.deviceVPNAvailable && !model.needsVPNRecovery))
                     }
                     Divider().overlay(MeshwayTheme.border)
                     HStack(spacing: 10) {
                         ForEach(ConnectionMode.allCases) { mode in modeButton(mode) }
                     }
-                    Text(model.connectionMode.explanation).font(.callout).foregroundStyle(MeshwayTheme.muted).fixedSize(horizontal: false, vertical: true)
+                    Text(model.connectionExplanation).font(.callout).foregroundStyle(MeshwayTheme.muted).fixedSize(horizontal: false, vertical: true)
                     if let ip = model.observedExitIP { Text("Observed exit IP: " + ip).font(.caption).foregroundStyle(MeshwayTheme.green).textSelection(.enabled) }
                     if !model.deviceVPNAvailable {
-                        HStack(spacing: 7) { Image(systemName: "info.circle"); Text("Internet VPN (TUN) requires an Apple-signed packet extension. SOCKS and personal tunnels are available now.") }.font(.caption).foregroundStyle(MeshwayTheme.muted)
+                        HStack(spacing: 7) { Image(systemName: "info.circle"); Text(model.vpnUnavailableMessage) }.font(.caption).foregroundStyle(MeshwayTheme.muted)
                     }
                     if let error = vpn.error { notice(error, icon: "exclamationmark.triangle", color: .orange) }
                     if let error = nativeVPN.error { notice(error, icon:"exclamationmark.triangle",color:.orange) }
@@ -1000,7 +1017,7 @@ struct ContentView: View {
                                 .toggleStyle(.switch).disabled(model.busy || (!systemProxy.enabled && !model.canEnableSystemProxy)).fixedSize()
                         }
                         Text("Set the app’s SOCKS5 proxy to \(model.status?.socks_listen.isEmpty == false ? model.status!.socks_listen : model.configuration.socksListen). Let the proxy resolve hostnames to use your server’s DNS.").font(.callout).foregroundStyle(MeshwayTheme.muted).textSelection(.enabled)
-                        Text(systemProxy.enabled ? "System proxy is enabled for supported apps. Previous SOCKS settings restore when you disconnect, stop or quit." : "Enable System proxy after connecting to an approved exit, or configure an individual app. The proxy affects apps that honor macOS SOCKS settings.").font(.caption).foregroundStyle(MeshwayTheme.muted)
+                        Text(model.deviceVPN ? "Internet VPN captures traffic directly. Meshway restores its System proxy settings before device VPN starts; no app proxy setup is required." : systemProxy.enabled ? "System proxy is enabled for supported apps. Previous SOCKS settings restore when you disconnect, stop or quit." : "Enable System proxy after connecting to an approved exit, or configure an individual app. The proxy affects apps that honor macOS SOCKS settings.").font(.caption).foregroundStyle(MeshwayTheme.muted)
                         Text("Traffic totals measure SOCKS payload + VPN packets through this node; they are not device-wide VPN totals.").font(.caption).foregroundStyle(MeshwayTheme.muted)
                     }
                     Spacer()
@@ -1016,13 +1033,13 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 7) { Image(systemName: mode.icon); Text(mode.title).fontWeight(.semibold); Spacer(minLength: 0); if selected { Image(systemName: "checkmark.circle.fill") } }
                     .font(.system(size: 12))
-                Text(unavailable ? "Apple signing required" : mode.subtitle).font(.system(size: 10)).foregroundStyle(selected ? MeshwayTheme.accent.opacity(0.8) : MeshwayTheme.muted)
+                Text(unavailable ? "Unavailable in this build" : mode == .internetVPN && nativeVPN.available ? "Entire device · macOS authorization" : mode.subtitle).font(.system(size: 10)).foregroundStyle(selected ? MeshwayTheme.accent.opacity(0.8) : MeshwayTheme.muted)
             }.padding(13).frame(maxWidth: .infinity, alignment: .leading)
                 .foregroundStyle(selected ? MeshwayTheme.accent : Color.white.opacity(unavailable ? 0.5 : 0.85))
                 .background(selected ? MeshwayTheme.accent.opacity(0.09) : MeshwayTheme.inset, in: RoundedRectangle(cornerRadius: 12))
                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(selected ? MeshwayTheme.accent.opacity(0.45) : MeshwayTheme.border, lineWidth: 1)).contentShape(RoundedRectangle(cornerRadius: 12))
-        }.buttonStyle(FullCardButtonStyle()).disabled(model.busy || model.activeVPN || unavailable)
-            .help(unavailable ? "A legitimate Apple Developer signing team and Network Extension entitlement are required." : mode.explanation)
+        }.buttonStyle(FullCardButtonStyle()).disabled(model.busy || model.activeVPN || model.needsVPNRecovery || unavailable)
+            .help(unavailable ? model.vpnUnavailableMessage : mode == .internetVPN && nativeVPN.available ? "macOS requests administrator authorization. Meshway verifies owned device capture and restores its changes when you disconnect." : mode.explanation)
     }
 
     private var serverList: some View {
@@ -1041,7 +1058,7 @@ struct ContentView: View {
                         Spacer()
                         if model.selectedPeer == server.peer_id { Text("Selected").font(.caption).foregroundStyle(MeshwayTheme.green) }
                         Button(model.selectedPeer == server.peer_id ? "Reconnect" : "Connect") { Task { await model.selectServer(server) } }
-                            .disabled(model.busy || !server.roles.exit || model.activeVPN || (model.deviceVPN && !model.deviceVPNAvailable))
+                            .disabled(model.busy || !server.roles.exit || model.activeVPN || model.needsVPNRecovery || (model.deviceVPN && !model.deviceVPNAvailable))
                     }.padding(13).background(MeshwayTheme.inset, in: RoundedRectangle(cornerRadius: 12))
                 }
                 Text("Only discovered or invited servers appear here. Location labels are supplied by their owners.").font(.caption).foregroundStyle(MeshwayTheme.muted)
@@ -1068,6 +1085,8 @@ struct ContentView: View {
                         detailRow("Peer identity", status.peer_id)
                         detailRow("Selected server", status.upstream_peer.isEmpty ? "None" : status.upstream_peer)
                         detailRow("Server transport", status.upstream_connected == true ? "Connected" : "Not connected")
+                        if nativeVPN.state != .disconnected { detailRow("Device VPN", nativeVPN.state.rawValue); if let device = nativeVPN.device { detailRow("Capture interface", device) } }
+                        if let packet = status.vpn { detailRow("VPN peer", packet.peer_id ?? "None"); detailRow("Packet transport", packet.active ? "Active" : "Reconnecting / inactive") }
                         detailRow("SOCKS5 listener", status.socks_listen.isEmpty ? "Disabled" : status.socks_listen)
                         if let transport = status.transport {
                             detailRow("Personal transport", transport.kind == "ssh" ? (transport.authenticated ? "SSH · authenticated Meshway peer" : transport.ready ? "SSH ready · waiting for Meshway authentication" : "SSH not ready") : "Direct encrypted peer")
