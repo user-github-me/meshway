@@ -380,6 +380,27 @@ func routeGet(e executor, ip string) (routeInfo, error) {
 	}
 	return r, nil
 }
+func routeFlag(flags, flag string) bool {
+	for _, value := range strings.Split(strings.Trim(flags, "<>"), ",") {
+		if strings.TrimSpace(value) == flag {
+			return true
+		}
+	}
+	return false
+}
+
+// A persistent bypass must win the effective lookup after split routes are
+// installed. Darwin invalidates clones when those routes change.
+func verifyUnderlays(underlays []string, e executor) error {
+	for _, underlay := range underlays {
+		route, err := routeGet(e, underlay)
+		if err != nil || strings.HasPrefix(route.Interface, "utun") {
+			return errors.New("encrypted peer underlay does not bypass the VPN capture; restoring owned changes")
+		}
+	}
+	return nil
+}
+
 func routePlan(device string, underlays []string, e executor, marker uint32) ([]step, error) {
 	if !validDevice(device) {
 		return nil, errors.New("invalid owned utun device")
@@ -406,9 +427,12 @@ func routePlan(device string, underlays []string, e executor, marker uint32) ([]
 		if strings.HasPrefix(old.Interface, "utun") {
 			return nil, errors.New("underlay already routes through another VPN tunnel")
 		}
-		if old.Destination == value {
+		// Darwin route-get returns an exact destination for a transient route
+		// cloned from the physical default. Adding /1 routes discards that
+		// clone, so it cannot serve as a persistent transport bypass.
+		if old.Destination == value && routeFlag(old.Flags, "HOST") && routeFlag(old.Flags, "STATIC") && !routeFlag(old.Flags, "WASCLONED") {
 			continue
-		} // Preserve an existing exact host route.
+		} // Preserve an existing explicit static host route.
 		family := "-inet"
 		if ip.Is6() {
 			family = "-inet6"
@@ -885,6 +909,9 @@ func Run(ctx context.Context, o Options) (result error) {
 			}
 			return fmt.Errorf("network setup ownership could not be verified (%s); restoring the owned changes", detail)
 		}
+	}
+	if err = verifyUnderlays(o.UnderlayIPs, e); err != nil {
+		return err
 	}
 	j.Active = true
 	if err = saveJournal(o, j); err != nil {

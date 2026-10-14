@@ -437,3 +437,43 @@ func TestRealDarwinDefaultHalfSpaceStillRequiresExactMaskMarkerAndDevice(t *test
 		}
 	}
 }
+
+func TestUnderlayCloneCannotReplaceExplicitPhysicalBypass(t *testing.T) {
+	const address = "192.0.2.5"
+	for _, tc := range []struct {
+		name, flags string
+		wantHost    bool
+	}{
+		{"cloned-physical-default", "<UP,GATEWAY,HOST,DONE,WASCLONED,IFSCOPE,IFREF>", true},
+		{"explicit-static-host", "<UP,GATEWAY,HOST,DONE,STATIC>", false},
+		{"cloned-with-static-metadata", "<UP,GATEWAY,HOST,DONE,STATIC,WASCLONED>", true},
+		{"not-a-host-route", "<UP,GATEWAY,DONE,STATIC>", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := &probeBackend{out: []byte("destination: " + address + "\n gateway: 192.0.2.1\n interface: en0\n flags: " + tc.flags + "\n")}
+			steps, err := routePlan("utun99", []string{address}, p, 123)
+			if err != nil {
+				t.Fatal(err)
+			}
+			hasHost := len(steps) == 5 && argument(steps[0].Apply.Args, "-host") == address && argument(steps[0].Apply.Args, "-gateway") == "192.0.2.1"
+			if hasHost != tc.wantHost {
+				t.Fatalf("persistent bypass=%v want=%v", hasHost, tc.wantHost)
+			}
+		})
+	}
+}
+
+func TestEffectiveUnderlayLookupMustSurviveSplitRoutes(t *testing.T) {
+	p := &probeBackend{out: markedRouteOutput("192.0.2.5", "en0", 123)}
+	if err := verifyUnderlays([]string{"192.0.2.5"}, p); err != nil {
+		t.Fatal(err)
+	}
+	p.out = markedRouteOutput("192.0.2.5", "utun99", 123)
+	if err := verifyUnderlays([]string{"192.0.2.5"}, p); err == nil {
+		t.Fatal("recursive encrypted transport accepted as ready")
+	}
+	p.err = context.DeadlineExceeded
+	if err := verifyUnderlays([]string{"192.0.2.5"}, p); err == nil {
+		t.Fatal("failed physical route probe accepted as ready")
+	}
+}

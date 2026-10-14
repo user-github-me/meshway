@@ -130,6 +130,31 @@ def execute(args):
             time.sleep(2)
         else:raise RuntimeError('Exit did not authorize the printed ephemeral peer within the bounded wait.')
         proof['checks']['approved_remote_exit_socks_baseline']=True
+        # Prove this exact remote encrypted packet stream before OS capture.
+        # The random owner prevents this fixture from stopping a foreign queue.
+        import secrets,struct,socket
+        packet_owner=secrets.token_hex(16)
+        def packet_request(path,data,content='application/json',seconds=5):
+            request=urllib.request.Request('http://'+c['api_listen']+path,data=data,headers={'Authorization':'Bearer '+c['api_token'],'X-Meshway-VPN-Session':packet_owner,'Content-Type':content})
+            with urllib.request.urlopen(request,timeout=seconds) as response:return response.status,response.read(9000)
+        acquired=False
+        try:
+            packet_request('/v1/vpn/start',json.dumps({'mode':'exit','peer_id':args.exit_peer,'session_id':packet_owner}).encode(),seconds=15);acquired=True
+            query=struct.pack('!HHHHHH',18723,256,1,0,0,0)+b'\x07example\x03com\x00'+struct.pack('!HH',1,1)
+            udp=struct.pack('!HHHH',55001,53,8+len(query),0)+query
+            header=bytearray(struct.pack('!BBHHHBBH4s4s',0x45,0,20+len(udp),1,0,64,17,0,socket.inet_aton('10.77.0.2'),socket.inet_aton('10.77.0.1')))
+            words=struct.unpack('!10H',header);total=sum(words)
+            while total>>16:total=(total&65535)+(total>>16)
+            header[10:12]=struct.pack('!H',(~total)&65535)
+            packet_request('/v1/vpn/write',bytes(header)+udp,'application/octet-stream')
+            matched=False;deadline=time.monotonic()+8
+            while time.monotonic()<deadline:
+                code,packet=packet_request('/v1/vpn/read',b'{}')
+                if code==200 and len(packet)>=40 and packet[0]>>4==4 and packet[9]==17 and packet[28:30]==query[:2]:matched=True;break
+            proof['checks']['remote_raw_packet_dns_before_capture']=matched
+            if not matched:raise RuntimeError('Remote raw packet DNS failed before any OS capture routes.')
+        finally:
+            if acquired:packet_request('/v1/vpn/stop',b'{}')
         for mode in ['explicit-stop','owner-process-exit','helper-sigkill-explicit-recovery']:
             phase=mode+':helper-setup'
             owner=subprocess.Popen([sys.executable,'-c','import time;time.sleep(180)'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
