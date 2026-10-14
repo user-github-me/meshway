@@ -14,6 +14,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/user-github-me/meshway/internal/config"
+	"github.com/user-github-me/meshway/internal/core"
 )
 
 // This diagnostic owns one new interface and one exact private host route. It
@@ -102,6 +105,72 @@ func TestHostedUTUNKernelUDPMetadata(t *testing.T) {
 		t.Fatal(err)
 	}
 	routeAdded = true
+	dns, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dns.Close()
+	go func() {
+		buffer := make([]byte, 1500)
+		for {
+			n, from, err := dns.ReadFrom(buffer)
+			if err != nil {
+				return
+			}
+			if n < 12 {
+				continue
+			}
+			reply := append([]byte(nil), buffer[:n]...)
+			reply[2] |= 0x80
+			_, _ = dns.WriteTo(reply, from)
+		}
+	}()
+	clientConfig, err := config.Default(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	clientConfig.ListenAddresses = []string{"/ip4/127.0.0.1/tcp/0"}
+	clientConfig.APIListen = "127.0.0.1:0"
+	clientConfig.SOCKSListen = ""
+	clientID, err := core.IdentityID(clientConfig.StateDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	serverConfig, err := config.Default(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	serverConfig.ListenAddresses = []string{"/ip4/127.0.0.1/tcp/0"}
+	serverConfig.APIListen = ""
+	serverConfig.SOCKSListen = ""
+	serverConfig.Exit = true
+	serverConfig.AllowPrivateTargets = true
+	serverConfig.AllowedPeers = []string{clientID}
+	serverConfig.VPN = &config.VPN{MTU: 1280, DNSResolver: dns.LocalAddr().String()}
+	server, err := core.Start(context.Background(), serverConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Stop()
+	client, err := core.Start(context.Background(), clientConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Stop()
+	if _, err = client.Connect(context.Background(), server.Status().Addresses[0]); err != nil {
+		t.Fatal(err)
+	}
+	clientConfig.APIListen = client.Status().APIListen
+	api, err := newPacketAPI(clientConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer api.client.CloseIdleConnections()
+	api.session = strings.Repeat("a", 32)
+	payload, _ := json.Marshal(map[string]string{"mode": "exit", "peer_id": server.Host.ID().String(), "session_id": api.session})
+	if _, _, err = api.request(context.Background(), "/v1/vpn/start", payload, "application/json"); err != nil {
+		t.Fatal(err)
+	}
 	for _, mode := range []string{"bound", "unbound"} {
 		var local *net.UDPAddr
 		if mode == "bound" {
@@ -146,7 +215,50 @@ func TestHostedUTUNKernelUDPMetadata(t *testing.T) {
 			pseudo = append(pseudo, udp...)
 			metadata[mode+"_packet"] = map[string]any{"utun_family": binary.BigEndian.Uint32(raw[:4]), "version": 4, "source_is_virtual_client": net.IP(packet[12:16]).String() == "10.77.0.2", "destination": "10.77.0.1", "protocol": 17, "ip_total_length": binary.BigEndian.Uint16(packet[2:4]), "frame_payload_length": len(packet), "ipv4_header_checksum": binary.BigEndian.Uint16(packet[10:12]), "ipv4_header_checksum_valid": kernelLabSum(packet[:h]) == 0xffff, "udp_length": binary.BigEndian.Uint16(udp[4:6]), "udp_checksum": binary.BigEndian.Uint16(udp[6:8]), "udp_checksum_valid": kernelLabSum(pseudo) == 0xffff, "udp_checksum_omitted": binary.BigEndian.Uint16(udp[6:8]) == 0}
 			stop.Stop()
+			if _, _, err = api.request(context.Background(), "/v1/vpn/write", packet, "application/octet-stream"); err != nil {
+				conn.Close()
+				t.Fatal(err)
+			}
+			var returned []byte
+			for tries := 0; tries < 3; tries++ {
+				var status int
+				returned, status, err = api.request(context.Background(), "/v1/vpn/read", nil, "")
+				if err != nil {
+					conn.Close()
+					t.Fatal(err)
+				}
+				if status == 200 {
+					break
+				}
+			}
+			if len(returned) == 0 {
+				metadata["bridge_failure"] = "no authenticated exit packet reply"
+				conn.Close()
+				t.Fatal("actual kernel packet received no loopback exit DNS reply")
+			}
+			frame, err := encodeFrame(returned, 1280)
+			if err != nil {
+				conn.Close()
+				t.Fatal(err)
+			}
+			if _, err = device.Write(frame); err != nil {
+				conn.Close()
+				t.Fatal(err)
+			}
+			_ = conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+			response := make([]byte, 1500)
+			n, err = conn.Read(response)
 			conn.Close()
+			if err != nil {
+				metadata["bridge_failure"] = "kernel did not accept exit response"
+				t.Fatal(err)
+			}
+			if n < 12 || binary.BigEndian.Uint16(response[:2]) != 0x4923 || response[2]&0x80 == 0 {
+				t.Fatal("kernel DNS payload mismatch")
+			}
+			metadata[mode+"_kernel_to_http_to_authenticated_exit_dns_round_trip"] = true
+			metadata["encrypted_peer_bytes_sent"] = client.Status().BytesSent
+			metadata["encrypted_peer_bytes_received"] = client.Status().BytesReceived
 			break
 		}
 	}

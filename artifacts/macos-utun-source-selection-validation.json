@@ -1,0 +1,40 @@
+{
+  "baseline_preserved": true,
+  "bound_packet": {
+    "destination": "10.77.0.1",
+    "frame_payload_length": 57,
+    "ip_total_length": 57,
+    "ipv4_header_checksum": 29079,
+    "ipv4_header_checksum_valid": true,
+    "protocol": 17,
+    "source_is_virtual_client": true,
+    "udp_checksum": 56657,
+    "udp_checksum_omitted": false,
+    "udp_checksum_valid": true,
+    "udp_length": 37,
+    "utun_family": 2,
+    "version": 4
+  },
+  "default_routes_dns_proxy_modified": false,
+  "owned_host_route_removed": true,
+  "owned_interface_closed": true,
+  "scope": "one disposable utun and private host route only",
+  "status": "PASS",
+  "unbound_packet": {
+    "destination": "10.77.0.1",
+    "frame_payload_length": 57,
+    "ip_total_length": 57,
+    "ipv4_header_checksum": 4883,
+    "ipv4_header_checksum_valid": true,
+    "protocol": 17,
+    "source_is_virtual_client": true,
+    "udp_checksum": 58817,
+    "udp_checksum_omitted": false,
+    "udp_checksum_valid": true,
+    "udp_length": 37,
+    "utun_family": 2,
+    "version": 4
+  },
+  "workflow_run_id": 38601147423,
+  "source_commit": "e6d367d118801d6b0192b6fb960f650cfa9c5f6a"
+}

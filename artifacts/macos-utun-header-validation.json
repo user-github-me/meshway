@@ -1,0 +1,25 @@
+{
+  "baseline_preserved": true,
+  "default_routes_dns_proxy_modified": false,
+  "owned_host_route_removed": true,
+  "owned_interface_closed": true,
+  "packet": {
+    "destination": "10.77.0.1",
+    "frame_payload_length": 57,
+    "ip_total_length": 57,
+    "ipv4_header_checksum": 8955,
+    "ipv4_header_checksum_valid": true,
+    "protocol": 17,
+    "source": "10.77.0.2",
+    "udp_checksum": 551,
+    "udp_checksum_omitted": false,
+    "udp_checksum_valid": true,
+    "udp_length": 37,
+    "utun_family": 2,
+    "version": 4
+  },
+  "scope": "one disposable utun and private host route only",
+  "status": "PASS",
+  "workflow_run_id": 38599416187,
+  "source_commit": "f97a5d100929631247d4ab355dc6b2e64dd9105b"
+}
