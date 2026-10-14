@@ -1,0 +1,42 @@
+{
+  "time": "2026-10-14T00:36:30.219344+00:00",
+  "region": "eastasia",
+  "topology": "macOS client on owner network -> two Azure Linux VMs, separate VNets, public authenticated libp2p direct and circuit-v2",
+  "host_network_modified": false,
+  "tests": {
+    "public_relay_reservation": {
+      "result": "PASS"
+    },
+    "direct_external_https": {
+      "result": "PASS",
+      "response_bytes": 576
+    },
+    "forced_external_circuit_https": {
+      "result": "PASS",
+      "response_bytes": 576
+    },
+    "relay_delay_packet_loss_https": {
+      "result": "PASS",
+      "response_bytes": 576,
+      "delay_ms": 80,
+      "jitter_ms": 20,
+      "loss_percent": 3
+    },
+    "actual_circuit_transport": {
+      "result": "PASS",
+      "limited": true
+    },
+    "relay_outage_detected": {
+      "result": "PASS"
+    },
+    "relay_restart_https": {
+      "result": "PASS",
+      "response_bytes": 576
+    },
+    "api_exposed_publicly": false
+  },
+  "resource_group": "meshway-validation-20261014-003630",
+  "binary_sha256": "7a6f88ae21d383614b4984f29b39fcd3442036a1d3a716ef1737d50eb93d69ed",
+  "status": "PASS",
+  "cleanup": "confirmed deleted"
+}

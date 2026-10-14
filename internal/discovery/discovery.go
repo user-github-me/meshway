@@ -38,6 +38,7 @@ type Server struct {
 	LastSeen   time.Time `json:"last_seen"`
 }
 type Options struct {
+	AutoDiscover bool
 	Personal     bool
 	Authorize    func(context.Context, peer.ID) bool
 	Advertise    bool
@@ -48,12 +49,19 @@ type Options struct {
 	AllowedPeers []string
 }
 type Service struct {
-	host    host.Host
-	options Options
-	mu      sync.Mutex
-	cache   map[peer.ID]Server
-	pending map[network.Stream]bool
-	closed  bool
+	host          host.Host
+	options       Options
+	mu            sync.Mutex
+	cache         map[peer.ID]Server
+	pending       map[network.Stream]bool
+	closed        bool
+	trusted       map[peer.ID]bool
+	directory     map[peer.ID]directoryHint
+	learned       map[peer.ID]directoryHint
+	lastDirectory map[peer.ID]time.Time
+	ctx           context.Context
+	cancel        context.CancelFunc
+	wg            sync.WaitGroup
 }
 
 func New(h host.Host, options Options) (*Service, error) {
@@ -66,9 +74,15 @@ func New(h host.Host, options Options) (*Service, error) {
 	if options.Country != "" && (len(options.Country) != 2 || strings.ToUpper(options.Country) != options.Country || options.Country[0] < 'A' || options.Country[0] > 'Z' || options.Country[1] < 'A' || options.Country[1] > 'Z') {
 		return nil, errors.New("country must be a two-letter uppercase country code")
 	}
-	s := &Service{host: h, options: options, cache: map[peer.ID]Server{}, pending: map[network.Stream]bool{}}
+	ctx, cancel := context.WithCancel(context.Background())
+	s := &Service{host: h, options: options, cache: map[peer.ID]Server{}, pending: map[network.Stream]bool{}, trusted: map[peer.ID]bool{}, directory: map[peer.ID]directoryHint{}, learned: map[peer.ID]directoryHint{}, lastDirectory: map[peer.ID]time.Time{}, ctx: ctx, cancel: cancel}
 	if options.Advertise {
 		h.SetStreamHandler(Protocol, s.handle)
+	}
+	if options.AutoDiscover {
+		h.SetStreamHandler(DirectoryProtocol, s.handleDirectory)
+		s.wg.Add(1)
+		go s.discoverLoop()
 	}
 	return s, nil
 }
@@ -90,12 +104,14 @@ func (s *Service) register(stream network.Stream) bool {
 		return false
 	}
 	s.pending[stream] = true
+	s.wg.Add(1)
 	return true
 }
 func (s *Service) remove(stream network.Stream) {
 	s.mu.Lock()
 	delete(s.pending, stream)
 	s.mu.Unlock()
+	s.wg.Done()
 }
 func (s *Service) handle(stream network.Stream) {
 	if !s.register(stream) {
@@ -200,7 +216,33 @@ func (s *Service) Server(ctx context.Context, id peer.ID) (Server, error) {
 	server.Available = true
 	server.LastSeen = time.Now().UTC()
 	s.mu.Lock()
+	if len(s.cache) >= 128 {
+		for cachedID, cached := range s.cache {
+			if time.Since(cached.LastSeen) > 10*time.Minute {
+				delete(s.cache, cachedID)
+			}
+		}
+		if len(s.cache) >= 128 {
+			for cachedID := range s.cache {
+				if cachedID != id {
+					delete(s.cache, cachedID)
+					break
+				}
+			}
+		}
+	}
 	s.cache[id] = server
+	if !server.Personal && s.options.AutoDiscover {
+		addresses := s.shareableAddresses(id, server.Addresses)
+		if len(addresses) > 0 {
+			hint := directoryHint{PeerID: id.String(), Addresses: addresses, Expires: time.Now().Add(5 * time.Minute)}
+			if origin, learned := s.learned[id]; learned {
+				hint.Hops = origin.Hops
+				hint.Expires = origin.Expires
+			}
+			s.directory[id] = hint
+		}
+	}
 	s.mu.Unlock()
 	return server, nil
 }
@@ -255,10 +297,13 @@ func (s *Service) Servers(ctx context.Context) []Server {
 func (s *Service) Close() error {
 	s.mu.Lock()
 	s.closed = true
+	s.cancel()
 	for stream := range s.pending {
 		stream.Reset()
 	}
 	s.mu.Unlock()
 	s.host.RemoveStreamHandler(Protocol)
+	s.host.RemoveStreamHandler(DirectoryProtocol)
+	s.wg.Wait()
 	return nil
 }

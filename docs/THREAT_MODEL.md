@@ -27,4 +27,4 @@ Connection history sync exposes data to other holders of the same recovery key. 
 
 IP transport currently implements a point-to-point packet link, with one device and one stream per endpoint. Routes, NAT, and DNS remain explicit. There is no automatic whole-device internet VPN, kill switch, leak-proof reconnect, or native macOS/Windows VPN driver integration. Linux privileged TUN and Android emulator kernel round-trip tests have passed; full routing/reconnect/privacy tests and physical devices remain required.
 
-Unsigned native builds, unpublished artifacts, a provisional repository namespace, and same-release checksums provide no authenticated update channel. Production distribution requires signatures, app signing/notarization, pinned release identities, reproducible builds, and update verification.
+Ed25519 publisher metadata and an independently bundled public-key pin authenticate releases and reject rollback/equivocation. Native OS signing/notarization and independent review remain separate requirements. A compromised local installation, publisher key or account root remains a trust-boundary failure.

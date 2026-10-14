@@ -1,0 +1,55 @@
+{
+  "test": "dual restrictive NAT, explicit circuit relay, reconnect and 3% packet loss",
+  "host_network_modified": false,
+  "tests": {
+    "direct_inbound_blocked": "PASS",
+    "circuit_https": {
+      "result": "PASS",
+      "response_bytes": 577
+    },
+    "actual_circuit_transport": "PASS",
+    "cellular_like_delay_loss": {
+      "result": "PASS",
+      "response_bytes": 577
+    },
+    "outage_detected": "PASS",
+    "restart_https": {
+      "result": "PASS",
+      "response_bytes": 577
+    }
+  },
+  "dns_resolution": "HTTPS public resolver answers scoped to disposable exit /etc/hosts; reserved synthetic host VPN DNS never allowed",
+  "transport_observations": [
+    {
+      "connections": [],
+      "event": "connections"
+    },
+    {
+      "connections": [
+        {
+          "limited": false,
+          "peer": "12D3KooWB2cgmduBP7B1VfmNe28kNh7WpKzsirox8PKn87yqP9PY",
+          "transport": "/ip4/172.157.0.4/tcp/4001"
+        }
+      ],
+      "event": "connections"
+    },
+    {
+      "connections": [
+        {
+          "limited": false,
+          "peer": "12D3KooWB2cgmduBP7B1VfmNe28kNh7WpKzsirox8PKn87yqP9PY",
+          "transport": "/ip4/172.157.0.4/tcp/4001"
+        },
+        {
+          "limited": true,
+          "peer": "12D3KooWGnqvy5nUSbGShJVqQUATN7UerZmAW3jdKJMKSR2jp7Qb",
+          "transport": "/ip4/172.157.0.4/tcp/4001/p2p/12D3KooWB2cgmduBP7B1VfmNe28kNh7WpKzsirox8PKn87yqP9PY/p2p-circuit"
+        }
+      ],
+      "event": "connections"
+    }
+  ],
+  "status": "PASS",
+  "cleanup": "owned containers and networks removed"
+}

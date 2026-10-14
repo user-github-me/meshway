@@ -13,6 +13,7 @@
       <TextBox x:Name="StatusText" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Consolas" MinHeight="110" Margin="0,0,0,20" />
       <GroupBox Header="Servers" Padding="12" Margin="0,0,0,18">
         <StackPanel>
+          <CheckBox x:Name="DeviceVPNMode" Content="Protect this device with VPN" IsChecked="True" Margin="0,0,0,12" />
           <TextBlock x:Name="CatalogMessage" Text="Start Meshway to see available servers." Foreground="#586575" TextWrapping="Wrap" Margin="0,0,0,12" />
           <Button Content="Disconnect" Click="DisconnectClicked" HorizontalAlignment="Left" Padding="14,7" Margin="0,0,0,12" />
           <StackPanel x:Name="ServerList" />
@@ -61,7 +62,7 @@
         </StackPanel>
       </GroupBox>
       <Button Content="Open configuration folder" Click="OpenFolderClicked" HorizontalAlignment="Left" Margin="0,16,0,12" />
-      <TextBlock Text="Encrypted SOCKS and TCP tunnels are available through the Go daemon. Device-wide Windows VPN requires a future packet driver integration." TextWrapping="Wrap" Foreground="#586575" />
+      <TextBlock Text="Device VPN protects IPv4, IPv6, and DNS through Wintun. Windows requests administrator consent when applying routes and firewall protection. SOCKS mode connects individual applications." TextWrapping="Wrap" Foreground="#586575" />
     </StackPanel>
   </ScrollViewer>
 </Window>

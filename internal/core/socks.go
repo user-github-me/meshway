@@ -42,7 +42,7 @@ func (n *Node) handleSOCKS(c net.Conn) {
 	if req[0] != 5 || req[2] != 0 {
 		return
 	}
-	if req[1] != 1 {
+	if req[1] != 1 && req[1] != 3 {
 		socksReply(c, 7)
 		return
 	}
@@ -79,6 +79,10 @@ func (n *Node) handleSOCKS(c net.Conn) {
 		return
 	}
 	p := binary.BigEndian.Uint16(port[:])
+	if req[1] == 3 {
+		n.handleSOCKSUDP(c, host, p)
+		return
+	}
 	if p == 0 {
 		socksReply(c, 1)
 		return

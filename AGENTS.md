@@ -12,4 +12,4 @@ Run relevant checks. `scripts/check.sh` aggregates Go vet/race, JS tests/typeche
 
 On case-insensitive filesystems, the Windows GUI `Meshway.exe` and core `meshway.exe` collide. Packaged Windows cores must be named `meshway-daemon.exe`.
 
-No publishing or deployment is implied by local build commands. Repository and package namespace are provisional until the owner supplies a real release destination.
+Owner authorized publication to github.com/user-github-me/meshway and GitHub Pages, and temporary Azure validation using the existing CLI session. Always delete owned temporary cloud resources and record cleanup. npm/container/app-store namespaces and legitimate native signing credentials require actual ownership; local build commands alone do not imply those destinations.

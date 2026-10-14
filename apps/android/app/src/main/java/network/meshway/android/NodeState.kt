@@ -4,7 +4,7 @@ import android.os.Handler
 import android.os.Looper
 import java.util.concurrent.CopyOnWriteArraySet
 
-data class Snapshot(val running: Boolean = false, val busy: Boolean = false, val vpn: Boolean = false, val status: String = "", val message: String = "Node stopped", val servers: String = "[]", val account: String = "")
+data class Snapshot(val running: Boolean = false, val busy: Boolean = false, val vpn: Boolean = false, val status: String = "", val message: String = "Node stopped", val servers: String = "[]", val account: String = "", val internetVpn: Boolean = false, val vpnConnected: Boolean = false)
 
 object NodeState {
     @Volatile var snapshot = Snapshot()

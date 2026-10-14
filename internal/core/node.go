@@ -18,16 +18,20 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/p2p/protocol/circuitv2/relay"
-	"github.com/meshway/meshway/internal/account"
-	"github.com/meshway/meshway/internal/config"
-	"github.com/meshway/meshway/internal/discovery"
-	"github.com/meshway/meshway/internal/state"
-	"github.com/meshway/meshway/internal/vpn"
+	"github.com/user-github-me/meshway/internal/account"
+	"github.com/user-github-me/meshway/internal/config"
+	"github.com/user-github-me/meshway/internal/discovery"
+	"github.com/user-github-me/meshway/internal/state"
+	"github.com/user-github-me/meshway/internal/vpn"
+	"golang.org/x/time/rate"
 )
 
-const Version = "0.1.0-dev"
+const Version = "0.1.0-alpha.1"
 
 type Node struct {
+	preferencesMu    sync.Mutex
+	bandwidthMu      sync.Mutex
+	bandwidthLimits  map[peer.ID]*rate.Limiter
 	Config           config.Config
 	Host             host.Host
 	ctx              context.Context
@@ -76,6 +80,7 @@ type Status struct {
 	StartedAt         time.Time  `json:"started_at"`
 	BytesSent         uint64     `json:"bytes_sent"`
 	BytesReceived     uint64     `json:"bytes_received"`
+	VPN               any        `json:"vpn,omitempty"`
 }
 
 func Start(parent context.Context, c config.Config) (*Node, error) {
@@ -86,10 +91,28 @@ func Start(parent context.Context, c config.Config) (*Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	key, err := Identity(c.StateDir)
+	key, err := IdentityWithKey(c.StateDir, c.StorageKey)
 	if err != nil {
 		lock.Close()
 		return nil, err
+	}
+	saved, err := readPreferences(c.StateDir, c.StorageKey)
+	if err != nil {
+		lock.Close()
+		return nil, err
+	}
+	known := make(map[string]bool)
+	for _, address := range c.BootstrapPeers {
+		known[address] = true
+	}
+	for _, address := range saved.Servers {
+		if !known[address] {
+			c.BootstrapPeers = append(c.BootstrapPeers, address)
+			known[address] = true
+		}
+	}
+	if c.UpstreamPeer == "" {
+		c.UpstreamPeer = saved.Selected
 	}
 	opts := []libp2p.Option{libp2p.Identity(key), libp2p.ListenAddrStrings(c.ListenAddresses...), libp2p.EnableRelay(), libp2p.EnableHolePunching(), libp2p.NATPortMap()}
 	// Relay reservations are requested only from configured bootstrap peers.
@@ -111,16 +134,37 @@ func Start(parent context.Context, c config.Config) (*Node, error) {
 		return nil, err
 	}
 	ctx, cancel := context.WithCancel(parent)
-	n := &Node{Config: c, Host: h, ctx: ctx, cancel: cancel, started: time.Now().UTC(), connections: make(map[net.Conn]struct{}), done: make(chan struct{}), sessions: make(chan struct{}, 128), stateLock: lock, upstreamPeer: c.UpstreamPeer, outbound: map[network.Stream]struct{}{}}
-	n.Account, err = account.New(c.StateDir, h, account.Options{SyncEnabled: c.AccountSync, Label: c.DeviceLabel})
+	maxSessions := 128
+	if c.Limits != nil && c.Limits.MaxSessions != 0 {
+		maxSessions = c.Limits.MaxSessions
+	}
+	n := &Node{bandwidthLimits: make(map[peer.ID]*rate.Limiter), Config: c, Host: h, ctx: ctx, cancel: cancel, started: time.Now().UTC(), connections: make(map[net.Conn]struct{}), done: make(chan struct{}), sessions: make(chan struct{}, maxSessions), stateLock: lock, upstreamPeer: c.UpstreamPeer, outbound: map[network.Stream]struct{}{}}
+	startupReady := make(chan struct{})
+	defer close(startupReady)
+	n.Account, err = account.New(c.StateDir, h, account.Options{SyncEnabled: c.AccountSync, Label: c.DeviceLabel, StorageKey: c.StorageKey, OnRevoked: func(id string) {
+		<-startupReady
+		if ctx.Err() != nil {
+			return
+		}
+		if id == h.ID().String() {
+			go n.Stop()
+			return
+		}
+		if p, err := peer.Decode(id); err == nil {
+			_ = h.Network().ClosePeer(p)
+		}
+	}})
 	if err != nil {
 		n.Stop()
 		return nil, err
 	}
-	n.Discovery, err = discovery.New(h, discovery.Options{Advertise: c.Advertise, Label: c.ServerLabel, Country: c.ServerCountry, Relay: c.Relay, Exit: c.Exit, AllowedPeers: c.AllowedPeers, Personal: c.PersonalServer, Authorize: func(ctx context.Context, id peer.ID) bool { return n.authorized(ctx, id) }})
+	n.Discovery, err = discovery.New(h, discovery.Options{AutoDiscover: c.AutoDiscovery, Advertise: c.Advertise, Label: c.ServerLabel, Country: c.ServerCountry, Relay: c.Relay, Exit: c.Exit, AllowedPeers: c.AllowedPeers, Personal: c.PersonalServer, Authorize: func(ctx context.Context, id peer.ID) bool { return n.authorized(ctx, id) }})
 	if err != nil {
 		n.Stop()
 		return nil, err
+	}
+	for _, p := range bootstrap {
+		n.Discovery.TrustPeer(p.ID)
 	}
 	if c.Relay {
 		n.relay, err = relay.New(h, relay.WithResources(relay.Resources{MaxReservations: 128, MaxCircuits: 16, BufferSize: 2048, ReservationTTL: time.Hour, MaxReservationsPerPeer: 1, MaxReservationsPerIP: 8, MaxReservationsPerASN: 32, Limit: &relay.RelayLimit{Duration: 2 * time.Minute, Data: 64 << 20}}))
@@ -130,8 +174,18 @@ func Start(parent context.Context, c config.Config) (*Node, error) {
 		}
 	}
 	h.SetStreamHandler(TunnelProtocol, n.handleTunnel)
-	if c.VPN != nil && c.VPN.Enabled {
-		vpnOptions := vpn.Options{AllowedPeers: c.AllowedPeers, MTU: c.VPN.MTU}
+	h.SetStreamHandler(UDPProtocol, n.handleUDP)
+	{
+		vpnOptions := vpn.Options{AllowedPeers: c.AllowedPeers, Exit: c.Exit, AllowPrivateTargets: c.AllowPrivateTargets, AccountBytes: func(sent, received uint64) { n.bytesSent.Add(sent); n.bytesReceived.Add(received) }}
+		if c.Limits != nil {
+			vpnOptions.BytesPerSecond = c.Limits.BytesPerSecond
+			vpnOptions.MaxExitSessions = c.Limits.MaxVPNSessions
+			vpnOptions.MaxFlowsPerSession = c.Limits.MaxFlowsPerVPN
+		}
+		if c.VPN != nil {
+			vpnOptions.MTU = c.VPN.MTU
+			vpnOptions.DNSResolver = c.VPN.DNSResolver
+		}
 		if c.PersonalServer {
 			vpnOptions.Authorize = func(ctx context.Context, id peer.ID) bool { return n.authorized(ctx, id) }
 		}
@@ -194,7 +248,11 @@ func Start(parent context.Context, c config.Config) (*Node, error) {
 			return nil, fmt.Errorf("open VPN device: %w", err)
 		}
 		original := os.NewFile(uintptr(fd), "meshway-original-tun")
-		err = n.vpn.AttachFD(fd, c.VPN.Peer)
+		if c.VPN.Internet {
+			err = n.vpn.AttachExitFD(fd, c.VPN.Peer)
+		} else {
+			err = n.vpn.AttachFD(fd, c.VPN.Peer)
+		}
 		if original != nil {
 			_ = original.Close()
 		}
@@ -325,6 +383,10 @@ func (n *Node) Connect(ctx context.Context, address string) (PeerInfo, error) {
 	if err = n.Host.Connect(ctx, *p); err != nil {
 		return PeerInfo{}, err
 	}
+	n.Discovery.TrustPeer(p.ID)
+	if err = n.savePreferences(address); err != nil {
+		return PeerInfo{}, err
+	}
 	if n.Account != nil {
 		_ = n.Account.Record("peer_connected", p.ID.String())
 	}
@@ -354,7 +416,7 @@ func (n *Node) Status() Status {
 	if id, err := peer.Decode(upstream); err == nil {
 		connected = n.peerConnected(id)
 	}
-	return Status{Version: Version, PeerID: n.Host.ID().String(), Addresses: addresses, Peers: peers, Roles: Roles{Relay: n.Config.Relay, Exit: n.Config.Exit}, SOCKSListen: n.socksAddress, APIListen: n.apiAddress, UpstreamPeer: upstream, UpstreamConnected: connected, StartedAt: n.started, BytesSent: n.bytesSent.Load(), BytesReceived: n.bytesReceived.Load()}
+	return Status{Version: Version, PeerID: n.Host.ID().String(), Addresses: addresses, Peers: peers, Roles: Roles{Relay: n.Config.Relay, Exit: n.Config.Exit}, SOCKSListen: n.socksAddress, APIListen: n.apiAddress, UpstreamPeer: upstream, UpstreamConnected: connected, StartedAt: n.started, BytesSent: n.bytesSent.Load(), BytesReceived: n.bytesReceived.Load(), VPN: n.VPNStatus()}
 }
 
 func (n *Node) UpstreamPeer() string { n.mu.Lock(); defer n.mu.Unlock(); return n.upstreamPeer }
@@ -382,6 +444,9 @@ func (n *Node) SelectPeer(ctx context.Context, peerID, address string) error {
 	if !server.CanConnect {
 		return errors.New("server approval required; ask its operator to allow your peer ID")
 	}
+	if status := n.vpn.Status(); status.PeerID != "" && status.PeerID != p.String() {
+		_ = n.StopPacketVPN()
+	}
 	n.mu.Lock()
 	streams := n.takeOutgoing()
 	n.upstreamPeer = p.String()
@@ -390,16 +455,18 @@ func (n *Node) SelectPeer(ctx context.Context, peerID, address string) error {
 		_ = stream.Reset()
 	}
 	_ = n.Account.Record("server_selected", p.String())
-	return nil
+	return n.savePreferences(address)
 }
 
 // Disconnect ends outgoing TCP proxy sessions while leaving this node's
 // independently enabled server and relay roles running.
 func (n *Node) Disconnect() {
+	_ = n.StopPacketVPN()
 	n.mu.Lock()
 	n.upstreamPeer = ""
 	streams := n.takeOutgoing()
 	n.mu.Unlock()
+	_ = n.savePreferences("")
 	for _, stream := range streams {
 		_ = stream.Reset()
 	}
@@ -539,12 +606,13 @@ func (n *Node) openTunnel(ctx context.Context, peerID string, req request) (netw
 }
 
 func (n *Node) bridge(c net.Conn, s network.Stream) {
+	limiter := n.bandwidth(s.Conn().RemotePeer())
 	defer func() { n.mu.Lock(); delete(n.outbound, s); n.mu.Unlock() }()
 	stop := context.AfterFunc(n.ctx, func() { _ = c.Close(); _ = s.Reset() })
 	defer stop()
 	done := make(chan struct{})
 	go func() {
-		_, err := io.Copy(countingWriter{Writer: activityConn{s}, counter: &n.bytesSent}, activityConn{c})
+		_, err := io.Copy(countingWriter{Writer: bandwidthWriter{Writer: activityConn{s}, ctx: n.ctx, limiter: limiter}, counter: &n.bytesSent}, activityConn{c})
 		if err != nil {
 			_ = c.Close()
 			_ = s.Reset()
@@ -555,7 +623,7 @@ func (n *Node) bridge(c net.Conn, s network.Stream) {
 		}
 		close(done)
 	}()
-	_, err := io.Copy(countingWriter{Writer: activityConn{c}, counter: &n.bytesReceived}, activityConn{s})
+	_, err := io.Copy(countingWriter{Writer: bandwidthWriter{Writer: activityConn{c}, ctx: n.ctx, limiter: limiter}, counter: &n.bytesReceived}, activityConn{s})
 	if err != nil {
 		_ = c.Close()
 		_ = s.Reset()

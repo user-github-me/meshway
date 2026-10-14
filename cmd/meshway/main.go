@@ -17,10 +17,10 @@ import (
 	"time"
 
 	libp2p "github.com/libp2p/go-libp2p"
-	"github.com/meshway/meshway/internal/account"
-	"github.com/meshway/meshway/internal/config"
-	"github.com/meshway/meshway/internal/core"
-	"github.com/meshway/meshway/internal/state"
+	"github.com/user-github-me/meshway/internal/account"
+	"github.com/user-github-me/meshway/internal/config"
+	"github.com/user-github-me/meshway/internal/core"
+	"github.com/user-github-me/meshway/internal/state"
 )
 
 func main() {
@@ -30,6 +30,10 @@ func main() {
 	}
 }
 func run(args []string) error {
+	if len(args) > 0 && (args[0] == "--help" || args[0] == "-h" || args[0] == "help") {
+		fmt.Println("Meshway: encrypted peer VPN, SOCKS and tunnels\n\nCommands: init, setup-server --personal, identity, daemon, status, version\nAccount: create, export --output FILE, import --input FILE [--force], rotate --output NEW_FILE, status, devices, history, sync --peer ID, revoke --peer ID\nAll commands accept --config PATH. Default: ~/.meshway/config.json\nStart: meshway init && meshway daemon\nDocumentation: https://github.com/user-github-me/meshway")
+		return nil
+	}
 	if len(args) == 0 {
 		return errors.New("usage: meshway init|identity|daemon|status|version [--config path]")
 	}
@@ -162,7 +166,7 @@ func accountCommand(args []string) error {
 	if err != nil {
 		return err
 	}
-	if args[0] == "export" || args[0] == "import" || args[0] == "create" {
+	if args[0] == "export" || args[0] == "import" || args[0] == "create" || args[0] == "rotate" {
 		lock, err := state.Acquire(c.StateDir)
 		if err != nil {
 			return err
@@ -170,6 +174,12 @@ func accountCommand(args []string) error {
 		defer lock.Close()
 	}
 	switch args[0] {
+	case "rotate":
+		if err := account.RotateRecovery(c.StateDir, *output, c.StorageKey); err != nil {
+			return err
+		}
+		fmt.Println("Recovery key rotated and saved privately. Import the new backup on every trusted device and private server before reconnecting.")
+		return nil
 	case "export":
 		if *output == "" {
 			return errors.New("--output is required; recovery secrets are never printed")
@@ -198,7 +208,7 @@ func accountCommand(args []string) error {
 			return err
 		}
 		defer h.Close()
-		store, err := account.New(c.StateDir, h, account.Options{Label: c.DeviceLabel, SyncEnabled: c.AccountSync})
+		store, err := account.New(c.StateDir, h, account.Options{Label: c.DeviceLabel, SyncEnabled: c.AccountSync, StorageKey: c.StorageKey})
 		if err != nil {
 			return err
 		}

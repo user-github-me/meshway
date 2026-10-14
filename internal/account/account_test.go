@@ -63,8 +63,8 @@ func TestRecoveryImportPreservesAccountWithDistinctDeviceIdentities(t *testing.T
 	if a.Status().DeviceID == b.Status().DeviceID {
 		t.Fatal("devices share transport identity")
 	}
-	if err := ImportRecovery(bDir, backup, false); err == nil {
-		t.Fatal("silently replaced existing account")
+	if err := ImportRecovery(bDir, backup, false); err != nil {
+		t.Fatal("restoring the same account should preserve existing data:", err)
 	}
 }
 

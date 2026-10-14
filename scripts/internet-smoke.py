@@ -6,6 +6,7 @@ temporary and never printed. This proves internet egress, not cross-network NAT.
 """
 import argparse
 import json
+import ipaddress
 import os
 from pathlib import Path
 import socket
@@ -64,9 +65,15 @@ def main():
     parser.add_argument('--binary', default='dist/meshway')
     parser.add_argument('--url', default='https://example.com/')
     parser.add_argument('--container-image', help='Optional trusted local Docker image containing meshway; tests a separate Linux network namespace')
+    parser.add_argument('--container-public-host', action='append', default=[], help='Optional HOST:PUBLIC_IPV4 entry scoped to disposable container when host VPN supplies synthetic reserved DNS answers')
     args = parser.parse_args()
     if not args.url.startswith('https://'):
         parser.error('Use an HTTPS target')
+    for entry in args.container_public_host:
+        try:
+            name, address=entry.rsplit(':',1)
+            if not name or not ipaddress.ip_address(address).is_global:raise ValueError()
+        except ValueError:parser.error('Container DNS override must contain a hostname and public IP')
     binary = str(Path(args.binary).resolve())
     processes = []
     try:
@@ -84,6 +91,7 @@ def main():
                 command=['docker','run','--rm','--user',f'{os.getuid()}:{os.getgid()}',
                          '-v',f'{spath.parent}:/var/lib/meshway','-p',f'127.0.0.1:{published_port}:14001',
                          '--entrypoint','meshway',args.container_image,'daemon','--config','/var/lib/meshway/config.json']
+                for entry in args.container_public_host:command[2:2]=['--add-host',entry]
                 process=subprocess.Popen(command,stdout=subprocess.DEVNULL,stderr=subprocess.PIPE)
                 processes.append(process)
                 for _ in range(100):

@@ -1,8 +1,9 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { mkdir, readFile, writeFile, chmod, rename, rm, stat } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, chmod, rename, rm, stat, open } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { publicKey, verifyRelease } from './release.js';
 
 export function binaryName(platform = process.platform, arch = process.arch) {
   const operatingSystem = { darwin: 'darwin', linux: 'linux', win32: 'windows' }[platform];
@@ -58,29 +59,57 @@ async function download(url, limit, fetchImpl) {
   throw new Error('Too many release redirects.');
 }
 
-// Checksums verify release integrity, not publisher identity. Use a trusted HTTPS release.
-export async function installCore({ base, directory = cacheDirectory(), platform, arch, fetchImpl = fetch }) {
+export async function installCore({ base, publisherKey, expectedVersion, directory = cacheDirectory(), platform, arch, fetchImpl = fetch }) {
   const name = binaryName(platform, arch);
   const release = releaseURL(base);
-  const manifest = checksums((await download(new URL('SHA256SUMS', release), 128 * 1024, fetchImpl)).toString('utf8'));
-  const expected = manifest.get(name);
-  if (!expected) throw new Error(`SHA256SUMS has no entry for ${name}.`);
+  publisherKey ||= await readFile(new URL('../release-public.pem', import.meta.url), 'utf8');
+  const canonicalKey = publicKey(publisherKey).export({ type: 'spki', format: 'pem' });
+  const metadata = await download(new URL('RELEASE.json', release), 128 * 1024, fetchImpl);
+  const signature = await download(new URL('RELEASE.json.sig', release), 64, fetchImpl);
+  const manifest = verifyRelease(metadata, signature, canonicalKey);
+  if (expectedVersion && manifest.version !== expectedVersion) throw new Error('Signed release version does not match requested version.');
+  const expected = manifest.files[name];
+  if (!expected) throw new Error(`Signed release has no entry for ${name}.`);
+  const destination = join(directory, name);
   const data = await download(new URL(name, release), 96 * 1024 * 1024, fetchImpl);
   if (sha256(data) !== expected) throw new Error('Binary checksum mismatch. Nothing was installed.');
   await mkdir(directory, { recursive: true, mode: 0o700 });
-  const destination = join(directory, name);
   const temporary = `${destination}.${randomBytes(8).toString('hex')}.tmp`;
+  const lockPath = join(directory, '.install.lock');
+  let lock;
+  try { lock = await open(lockPath, 'wx', 0o600); }
+  catch (error) {
+    if (error.code === 'EEXIST') throw new Error('Another installer holds this cache lock. Retry after it finishes; remove a stale lock only after confirming no installer is running.');
+    throw error;
+  }
   try {
+    // Check rollback while holding the writer lock, after downloads complete.
+    if (await exists(`${destination}.release.json`)) {
+      const previousKey = await readFile(`${destination}.pub.pem`, 'utf8');
+      if (previousKey !== canonicalKey) throw new Error('Installed publisher key differs. Use a separate cache to explicitly adopt a new publisher key.');
+      const previousMetadata = await readFile(`${destination}.release.json`);
+      const previous = verifyRelease(previousMetadata, await readFile(`${destination}.release.sig`), canonicalKey, { allowExpired: true });
+      if (manifest.sequence < previous.sequence || (manifest.sequence === previous.sequence && sha256(metadata) !== sha256(previousMetadata))) throw new Error('Release rollback or conflicting release sequence rejected.');
+    }
     await writeFile(temporary, data, { flag: 'wx', mode: 0o700 });
     await chmod(temporary, 0o700);
+    // Metadata is written first: interruption fails closed instead of launching unverified bytes.
+    await writeFile(`${destination}.pub.pem`, canonicalKey, { mode: 0o600 });
+    await writeFile(`${destination}.release.json`, metadata, { mode: 0o600 });
+    await writeFile(`${destination}.release.sig`, signature, { mode: 0o600 });
     await rename(temporary, destination);
-    await writeFile(`${destination}.sha256`, `${expected}\n`, { mode: 0o600 });
-  } finally { await rm(temporary, { force: true }); }
+  } finally { await rm(temporary, { force: true }); await lock.close(); await rm(lockPath, { force: true }); }
   return destination;
 }
 
 async function exists(path) {
   try { return (await stat(path)).isFile(); } catch { return false; }
+}
+
+export async function verifyCachedCore(cached, name) {
+  const release = verifyRelease(await readFile(`${cached}.release.json`), await readFile(`${cached}.release.sig`), await readFile(`${cached}.pub.pem`, 'utf8'), { allowExpired: true });
+  if (sha256(await readFile(cached)) !== release.files[name]) throw new Error('Cached core checksum changed. Reinstall the core.');
+  return cached;
 }
 
 export async function resolveCore() {
@@ -95,9 +124,7 @@ export async function resolveCore() {
   }
   const cached = join(cacheDirectory(), name);
   if (await exists(cached)) {
-    const expected = (await readFile(`${cached}.sha256`, 'utf8')).trim();
-    if (!/^[a-f0-9]{64}$/.test(expected) || sha256(await readFile(cached)) !== expected) throw new Error('Cached core checksum changed. Reinstall the core.');
-    return cached;
+    return verifyCachedCore(cached, name);
   }
-  throw new Error('Meshway core is not installed. In the source checkout run ./scripts/build.sh, or run meshway install-core --release-base https://YOUR-RELEASE-DIRECTORY/.');
+  throw new Error('Meshway core is not installed. In the source checkout run ./scripts/build.sh, or run meshway install-core --release-base https://YOUR-RELEASE-DIRECTORY/ --public-key /path/to/publisher-public.pem.');
 }

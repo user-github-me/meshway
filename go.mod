@@ -1,11 +1,15 @@
-module github.com/meshway/meshway
+module github.com/user-github-me/meshway
 
 go 1.26.0
 
 require (
 	github.com/libp2p/go-libp2p v0.50.0
 	github.com/multiformats/go-multiaddr v0.16.1
+	github.com/sagernet/gvisor v0.0.0-20260727.0-sing-box-mod.3
+	golang.org/x/net v0.61.0
 	golang.org/x/sys v0.49.0
+	golang.org/x/time v0.15.0
+	golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2
 )
 
 require (
@@ -19,6 +23,7 @@ require (
 	github.com/dunglas/httpsfv v1.1.1 // indirect
 	github.com/filecoin-project/go-clock v0.1.0 // indirect
 	github.com/flynn/noise v1.1.0 // indirect
+	github.com/google/btree v1.1.2 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/huin/goupnp v1.3.0 // indirect
@@ -85,11 +90,9 @@ require (
 	golang.org/x/exp v0.0.0-20260718201538-764159d718ef // indirect
 	golang.org/x/mobile v0.0.0-20261011034528-197770444867 // indirect
 	golang.org/x/mod v0.42.0 // indirect
-	golang.org/x/net v0.61.0 // indirect
 	golang.org/x/sync v0.24.0 // indirect
 	golang.org/x/telemetry v0.0.0-20261009151841-97e8ea77aa2a // indirect
 	golang.org/x/text v0.43.0 // indirect
-	golang.org/x/time v0.15.0 // indirect
 	golang.org/x/tools v0.52.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	lukechampine.com/blake3 v1.4.1 // indirect

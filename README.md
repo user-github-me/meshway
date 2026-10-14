@@ -1,8 +1,8 @@
 # Meshway
 
-An open source peer network for encrypted SOCKS5 connections, private TCP service tunnels, volunteer relays, and experimental point-to-point IP VPN links. Go powers the shared core; Kotlin, Swift, C#, and TypeScript power the platform interfaces.
+An open source peer network for encrypted SOCKS5 connections, private TCP service tunnels, volunteer relays, and experimental IPv4/IPv6 internet VPN with tunneled DNS. Go powers the shared core; Kotlin, Swift, C#, and TypeScript power the platform interfaces.
 
-Meshway is an early development release. No public server network, npm package, signed app store release, or hosted website has been published. See [the implementation roadmap](docs/PLAN.md) and [verified status](docs/STATUS.md) for what is implemented and what needs more work.
+Meshway is an experimental open-source alpha. [Source and releases](https://github.com/user-github-me/meshway) are public. A public volunteer server network and signed app-store releases require separate operation and credentials. See [the implementation roadmap](docs/PLAN.md) and [verified status](docs/STATUS.md) for what is implemented and what needs more work.
 
 ## Run from source
 
@@ -42,6 +42,7 @@ Create/export/import use private files and must run while the daemon is stopped.
 ## Platforms and installation
 
 - macOS: native SwiftUI client, bundled Go daemon; `./apps/macos/build.sh` after building the core.
+- iOS: Swift app and Network Extension; `apps/apple/build.sh` with your Apple provisioning profile.
 - Windows: C#/WPF client; source/build scripts under `apps/windows`.
 - Linux: native Go daemon, authenticated web dashboard, optional Linux TUN interface.
 - Android: Kotlin client with a Go mobile binding and `VpnService`; `apps/android/build.sh`.
@@ -49,7 +50,7 @@ Create/export/import use private files and must run while the daemon is stopped.
 - Server: [container and systemd instructions](docs/DEPLOYMENT.md).
 - npm: local launcher under `packages/cli`; supports verified release downloads after release publication.
 
-[Platform details](docs/PLATFORMS.md) distinguish compilation, signing, and actual device testing. Native macOS/Windows full-device packet VPN, iOS, kill switch, DNS leak protection, and automatic public discovery remain release gates.
+[Platform details](docs/PLATFORMS.md) distinguish compilation, signing, and actual device testing. Apple Network Extension, Windows Wintun, Android VpnService, and Linux TUN integrations are implemented. IPv4/IPv6 TCP, UDP, routed DNS, and Linux failure blocking have working integration tests. Apple signing and physical-device validation remain release requirements. See [VPN behavior](docs/VPN.md) and [desktop integration](docs/DESKTOP_VPN.md).
 
 ## Development
 

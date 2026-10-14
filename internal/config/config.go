@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/user-github-me/meshway/internal/state"
 	ma "github.com/multiformats/go-multiaddr"
 )
 
@@ -32,13 +33,25 @@ type Service struct {
 }
 
 type VPN struct {
-	Enabled bool   `json:"enabled"`
-	MTU     int    `json:"mtu"`
-	Device  string `json:"device,omitempty"`
-	Peer    string `json:"peer,omitempty"`
+	Enabled     bool   `json:"enabled"`
+	MTU         int    `json:"mtu"`
+	Device      string `json:"device,omitempty"`
+	Peer        string `json:"peer,omitempty"`
+	Internet    bool   `json:"internet"`
+	DNSResolver string `json:"dns_resolver,omitempty"`
+}
+
+type Limits struct {
+	MaxSessions    int `json:"max_sessions,omitempty"`
+	BytesPerSecond int `json:"bytes_per_second,omitempty"`
+	MaxVPNSessions int `json:"max_vpn_sessions,omitempty"`
+	MaxFlowsPerVPN int `json:"max_flows_per_vpn,omitempty"`
 }
 
 type Config struct {
+	AutoDiscovery       bool      `json:"auto_discovery"`
+	Limits              *Limits   `json:"limits,omitempty"`
+	StorageKey          []byte    `json:"-"`
 	StateDir            string    `json:"state_dir"`
 	ListenAddresses     []string  `json:"listen_addresses"`
 	BootstrapPeers      []string  `json:"bootstrap_peers"`
@@ -63,11 +76,15 @@ type Config struct {
 }
 
 func Default(stateDir string) (Config, error) {
+	key, err := state.KeyFromEnvironment()
+	if err != nil {
+		return Config{}, err
+	}
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
 		return Config{}, err
 	}
-	return Config{StateDir: stateDir, ListenAddresses: []string{"/ip4/0.0.0.0/tcp/4001", "/ip4/0.0.0.0/udp/4001/quic-v1"}, BootstrapPeers: []string{}, SOCKSListen: "127.0.0.1:1080", APIListen: "127.0.0.1:7777", APIToken: base64.RawURLEncoding.EncodeToString(b), AllowedOrigins: []string{"http://localhost:5173", "http://127.0.0.1:5173"}, AllowedPeers: []string{}, Forwards: []Forward{}, Services: []Service{}}, nil
+	return Config{StorageKey: key, StateDir: stateDir, ListenAddresses: []string{"/ip4/0.0.0.0/tcp/4001", "/ip4/0.0.0.0/udp/4001/quic-v1"}, BootstrapPeers: []string{}, SOCKSListen: "127.0.0.1:1080", APIListen: "127.0.0.1:7777", APIToken: base64.RawURLEncoding.EncodeToString(b), AllowedOrigins: []string{"http://localhost:5173", "http://127.0.0.1:5173"}, AllowedPeers: []string{}, Forwards: []Forward{}, Services: []Service{}}, nil
 }
 
 func Decode(r io.Reader) (Config, error) {
@@ -90,7 +107,12 @@ func Load(path string) (Config, error) {
 		return Config{}, err
 	}
 	defer f.Close()
-	return Decode(f)
+	c, err := Decode(f)
+	if err != nil {
+		return c, err
+	}
+	c.StorageKey, err = state.KeyFromEnvironment()
+	return c, err
 }
 
 func Save(path string, c Config, force bool) error {
@@ -137,6 +159,14 @@ func LoopbackAddress(addr string) error {
 }
 
 func (c Config) Validate() error {
+	if c.Limits != nil {
+		if c.Limits.MaxSessions < 0 || c.Limits.MaxSessions > 1024 || c.Limits.BytesPerSecond < 0 || c.Limits.BytesPerSecond > 1<<30 || c.Limits.MaxVPNSessions < 0 || c.Limits.MaxVPNSessions > 128 || c.Limits.MaxFlowsPerVPN < 0 || c.Limits.MaxFlowsPerVPN > 1024 {
+			return errors.New("limits exceed permitted session, flow, or bandwidth bounds")
+		}
+	}
+	if len(c.StorageKey) != 0 && len(c.StorageKey) != 32 {
+		return errors.New("storage key must have 32 bytes")
+	}
 	if len(c.DeviceLabel) > 80 {
 		return errors.New("device_label must be at most 80 characters")
 	}
@@ -150,6 +180,12 @@ func (c Config) Validate() error {
 		if c.VPN.Peer != "" {
 			if _, err := peer.Decode(c.VPN.Peer); err != nil {
 				return fmt.Errorf("vpn.peer: %w", err)
+			}
+		}
+		if c.VPN.DNSResolver != "" {
+			host, port, err := net.SplitHostPort(c.VPN.DNSResolver)
+			if err != nil || net.ParseIP(host) == nil || port != "53" {
+				return errors.New("vpn.dns_resolver must be an explicit IP address on port 53")
 			}
 		}
 	}

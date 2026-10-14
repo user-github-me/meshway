@@ -314,10 +314,17 @@ func (s *Store) merge(incoming state, remote Certificate) error {
 		events[e.ID] = e
 	}
 	merged := state{Devices: make([]Device, 0, len(devices)), Events: make([]Event, 0, len(events))}
+	merged.Deletion = s.data.Deletion
+	if incoming.Deletion != nil && (merged.Deletion == nil || incoming.Deletion.Before.After(merged.Deletion.Before)) {
+		merged.Deletion = incoming.Deletion
+	}
 	for _, d := range devices {
 		merged.Devices = append(merged.Devices, d)
 	}
 	for _, e := range events {
+		if merged.Deletion != nil && !e.Time.After(merged.Deletion.Before) {
+			continue
+		}
 		merged.Events = append(merged.Events, e)
 	}
 	sort.Slice(merged.Devices, func(i, j int) bool { return merged.Devices[i].PeerID < merged.Devices[j].PeerID })
@@ -335,6 +342,19 @@ func (s *Store) merge(incoming state, remote Certificate) error {
 	if err := s.save(); err != nil {
 		s.data = previous
 		return err
+	}
+	if s.onRevoked != nil {
+		known := map[string]bool{}
+		for _, d := range previous.Devices {
+			if d.Revoked {
+				known[d.PeerID] = true
+			}
+		}
+		for _, d := range merged.Devices {
+			if d.Revoked && !known[d.PeerID] {
+				go s.onRevoked(d.PeerID)
+			}
+		}
 	}
 	return nil
 }

@@ -9,4 +9,5 @@
     <AssemblyName>Meshway</AssemblyName>
     <Version>0.1.0</Version>
   </PropertyGroup>
+  <ItemGroup><Compile Include="../Meshway.VpnHelper/StateKey.cs" Link="StateKey.cs" /></ItemGroup>
 </Project>

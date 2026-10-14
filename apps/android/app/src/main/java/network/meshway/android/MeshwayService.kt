@@ -33,13 +33,21 @@ class MeshwayService : VpnService() {
     private var node: Node? = null
     private var tunnel: ParcelFileDescriptor? = null
     private var vpnActive = false
+    private var internetPeer = ""
+    private var internetAttached = false
 
     override fun onCreate() {
         super.onCreate()
         getSystemService(NotificationManager::class.java).createNotificationChannel(NotificationChannel(CHANNEL, "Meshway node", NotificationManager.IMPORTANCE_LOW))
         worker.scheduleWithFixedDelay({
             node?.let { active ->
-                try { NodeState.update(NodeState.snapshot.copy(running = true, busy = false, vpn = vpnActive, status = readableStatus(active.status()))) }
+                try {
+                    if (vpnActive && internetPeer.isNotEmpty() && !internetAttached) attachInternet(active)
+                    val raw = active.status()
+                    val connected = JSONObject(raw).optJSONObject("vpn")?.optBoolean("active") ?: false
+                    NodeState.update(NodeState.snapshot.copy(running = true, busy = false, vpn = vpnActive, internetVpn = internetPeer.isNotEmpty(), vpnConnected = connected, status = readableStatus(raw)))
+                    if (internetPeer.isNotEmpty()) getSystemService(NotificationManager::class.java).notify(NOTIFICATION, notification(if (connected) "Internet VPN connected" else "VPN reconnecting · internet traffic blocked"))
+                }
                 catch (error: Exception) { NodeState.update(NodeState.snapshot.copy(message = "Status error: ${error.message}")) }
             }
         }, 3, 3, TimeUnit.SECONDS)
@@ -58,7 +66,14 @@ class MeshwayService : VpnService() {
             }
             SERVERS -> worker.execute { try { refreshServers() } catch (error: Exception) { NodeState.update(NodeState.snapshot.copy(message = "Server list failed: ${error.message}")) } }
             SELECT -> worker.execute {
-                try { requireNotNull(node).selectPeer(intent.getStringExtra("peer") ?: "", intent.getStringExtra("address") ?: ""); NodeState.update(NodeState.snapshot.copy(message = "Server selected. SOCKS applications can use this connection.")); refreshServers() }
+                try {
+                    val active = requireNotNull(node)
+                    val selected = intent.getStringExtra("peer") ?: ""
+                    active.selectPeer(selected, intent.getStringExtra("address") ?: "")
+                    if (intent.getBooleanExtra("internet", false)) startInternet(active, selected)
+                    else NodeState.update(NodeState.snapshot.copy(message = "Server selected. SOCKS applications can use this connection."))
+                    refreshServers()
+                }
                 catch (error: Exception) { NodeState.update(NodeState.snapshot.copy(message = "Selection failed: ${error.message}")) }
             }
             ACCOUNT -> worker.execute { try { refreshAccount() } catch (error: Exception) { NodeState.update(NodeState.snapshot.copy(message = "Account unavailable: ${error.message}")) } }
@@ -67,11 +82,45 @@ class MeshwayService : VpnService() {
                 catch (error: Exception) { NodeState.update(NodeState.snapshot.copy(message = "Sync failed: ${error.message}")) }
             }
             DISCONNECT -> worker.execute {
-                if (vpnActive) { stopNode("Private VPN stopped"); stopSelf() }
+                if (internetPeer.isNotEmpty()) {
+                    node?.stopPacketVPN()
+                    tunnel?.close(); tunnel = null
+                    vpnActive = false; internetPeer = ""; internetAttached = false
+                    node?.disconnect()
+                    NodeState.update(NodeState.snapshot.copy(vpn = false, internetVpn = false, vpnConnected = false, message = "VPN disconnected. Your normal internet connection is restored."))
+                }
+                else if (vpnActive) { stopNode("Private VPN stopped"); stopSelf() }
                 else { node?.disconnect(); NodeState.update(NodeState.snapshot.copy(message = "Disconnected from the selected exit.")) }
             }
         }
         return START_NOT_STICKY
+    }
+
+    private fun startInternet(active: Node, peer: String) {
+        require(!vpnActive || internetPeer.isNotEmpty()) { "Stop your private subnet tunnel before starting an internet VPN." }
+        if (internetPeer != peer) {
+            active.stopPacketVPN()
+            internetAttached = false
+        }
+        if (tunnel == null) {
+            // Both address families and DNS stay in TUN. Only Meshway's own
+            // transport sockets are excluded to avoid recursively tunnelling them.
+            tunnel = Builder().setSession("Meshway internet VPN").setMtu(1280)
+                .addAddress("10.77.0.2", 32).addAddress("fd77::2", 128)
+                .addRoute("0.0.0.0", 0).addRoute("::", 0)
+                .addDnsServer("10.77.0.1").addDnsServer("fd77::1")
+                .addDisallowedApplication(packageName).setBlocking(true).establish()
+                ?: throw IllegalStateException("Android did not establish the VPN interface")
+        }
+        internetPeer = peer
+        vpnActive = true
+        attachInternet(active)
+        NodeState.update(NodeState.snapshot.copy(vpn = true, internetVpn = true, vpnConnected = internetAttached, message = if (internetAttached) "Internet VPN connected. Apps and DNS use your selected server." else "VPN reconnecting. Internet traffic stays blocked until the server responds; Disconnect restores your usual connection."))
+    }
+
+    private fun attachInternet(active: Node) {
+        try { active.startInternetVPN(requireNotNull(tunnel).fd.toLong(), internetPeer); internetAttached = true }
+        catch (_: Exception) { internetAttached = false }
     }
 
     private fun startNode(intent: Intent) {
@@ -80,7 +129,7 @@ class MeshwayService : VpnService() {
             val config = JSONObject(File(filesDir, "config.json").readText())
             // Android owns TUN establishment; empty device prevents Linux device setup.
             config.put("vpn", JSONObject().put("enabled", intent.getBooleanExtra("vpn", false)).put("device", "").put("peer", "").put("mtu", 1280))
-            val active = Meshway.start(config.toString())
+	            val active = Meshway.startSecure(config.toString(), StateVault.key(this))
             node = active
             if (intent.getBooleanExtra("vpn", false)) {
                 val peer = intent.getStringExtra("peer") ?: ""
@@ -125,7 +174,8 @@ class MeshwayService : VpnService() {
     private fun readableStatus(raw: String): String {
         val status = JSONObject(raw)
         val upstream = if (status.optString("upstream_peer").isEmpty()) "No exit selected" else if (status.optBoolean("upstream_connected")) "Selected exit connection is live" else "Selected exit offline · reconnects on traffic"
-        return "$upstream\nPeer: ${status.optString("peer_id")}\nSOCKS5: ${status.optString("socks_listen")}\nConnected peers: ${status.optJSONArray("peers")?.length() ?: 0}\nSent: ${status.optLong("bytes_sent")} bytes · Received: ${status.optLong("bytes_received")} bytes\n" + (status.optJSONArray("addresses")?.let { addresses -> (0 until addresses.length()).joinToString("\n") { addresses.getString(it) } } ?: "")
+        val internet = if (internetPeer.isEmpty()) "" else if (status.optJSONObject("vpn")?.optBoolean("active") == true) "Internet VPN connected · IPv4, IPv6 and DNS\n" else "Internet VPN reconnecting · traffic blocked\n"
+        return "$internet$upstream\nPeer: ${status.optString("peer_id")}\nSOCKS5: ${status.optString("socks_listen")}\nConnected peers: ${status.optJSONArray("peers")?.length() ?: 0}\nSent: ${status.optLong("bytes_sent")} bytes · Received: ${status.optLong("bytes_received")} bytes\n" + (status.optJSONArray("addresses")?.let { addresses -> (0 until addresses.length()).joinToString("\n") { addresses.getString(it) } } ?: "")
     }
 
     private fun stopNode(message: String) {
@@ -136,6 +186,8 @@ class MeshwayService : VpnService() {
         try { node?.stop() } catch (_: Exception) { }
         node = null
         vpnActive = false
+        internetPeer = ""
+        internetAttached = false
         stopForeground(STOP_FOREGROUND_REMOVE)
         NodeState.update(Snapshot(message = message))
     }

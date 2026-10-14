@@ -16,6 +16,7 @@ jobs:
       - run: go vet ./...
       - run: go test -race ./... -count=1 -timeout=180s
       - run: ./scripts/build.sh --all
+      - run: go build ./cmd/meshway-net-lab
       - uses: golang/govulncheck-action@v1
         with:
           go-version-input: '1.27.2'
@@ -62,7 +63,17 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.2'
       - run: dotnet build apps/windows/Meshway/Meshway.csproj -c Release
+      - run: go build -o dist/meshway-windows-amd64.exe ./cmd/meshway
+      - run: ./apps/windows/build.ps1 -Runtime win-x64 -Daemon dist/meshway-windows-amd64.exe
+      - run: ./scripts/validate-windows.ps1 -Daemon dist/Meshway-win-x64/meshway-daemon.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-runtime-evidence
+          path: artifacts/windows-validation.json
   android:
     runs-on: ubuntu-latest
     steps:

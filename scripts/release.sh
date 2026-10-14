@@ -4,14 +4,14 @@ project_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$project_dir"
 ./scripts/build.sh --all
 mkdir -p release
+# New metadata must be signed after all packaging steps finish.
+rm -f release/RELEASE.json release/RELEASE.json.sig
 python3 - <<'PY'
 from pathlib import Path
 import hashlib, shutil, tarfile, zipfile
 release=Path('release')
-checksums=[]
 for binary in sorted(Path('dist/bin').glob('meshway-*')):
     shutil.copy2(binary,release/binary.name)
-    checksums.append(f'{hashlib.sha256(binary.read_bytes()).hexdigest()}  {binary.name}')
     name=binary.name.removesuffix('.exe')
     if binary.suffix=='.exe':
         with zipfile.ZipFile(release/f'{name}.zip','w',zipfile.ZIP_DEFLATED) as archive:
@@ -23,6 +23,43 @@ for binary in sorted(Path('dist/bin').glob('meshway-*')):
             archive.add(binary,arcname='meshway')
             archive.add('LICENSE',arcname='LICENSE')
             archive.add('README.md',arcname='README.md')
+checksums=[f'{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}' for path in sorted(release.iterdir()) if path.is_file()]
 (release/'SHA256SUMS').write_text('\n'.join(checksums)+'\n')
 print('Local release artifacts created in release/. Nothing was published.')
 PY
+# Package the complete native bundles when they exist. No partial GUI-only
+# Windows zip may omit its daemon, helper, signed driver and license.
+python3 - <<'PY'
+from pathlib import Path
+import subprocess, zipfile
+release=Path('release')
+for runtime in ('win-x64','win-arm64'):
+    package=Path('dist')/f'Meshway-{runtime}'
+    if not package.is_dir(): continue
+    required=('Meshway.exe','meshway-daemon.exe','meshway-vpn-helper.exe','wintun.dll','WINTUN-LICENSE.txt')
+    if any(not (package/name).is_file() for name in required):
+        raise SystemExit(f'Incomplete Windows bundle: {package}')
+    with zipfile.ZipFile(release/f'Meshway-{runtime}.zip','w',zipfile.ZIP_DEFLATED) as archive:
+        for file in sorted(package.rglob('*')):
+            if file.is_file(): archive.write(file, str(Path('Meshway')/file.relative_to(package)))
+for apk in Path('dist').glob('meshway-android-*.apk'):
+    import shutil
+    shutil.copy2(apk,release/apk.name)
+native=Path('dist/apple-macos/Build/Products/Release/Meshway.app')
+simple=Path('dist/Meshway.app')
+app=native if native.is_dir() else simple
+if app.is_dir() and __import__('sys').platform=='darwin':
+    subprocess.run(['ditto','-c','-k','--keepParent',str(app),str(release/'Meshway-macos.zip')],check=True)
+for browser in ('chrome','firefox'):
+    extension=Path('apps/extension/dist')/browser
+    if not extension.is_dir(): continue
+    with zipfile.ZipFile(release/f'Meshway-extension-{browser}.zip','w',zipfile.ZIP_DEFLATED) as archive:
+        for file in sorted(extension.rglob('*')):
+            if file.is_file(): archive.write(file,str(file.relative_to(extension)))
+PY
+if [ -n "${MESHWAY_RELEASE_KEY_FILE:-}" ]; then
+  : "${MESHWAY_RELEASE_VERSION:?Set release version}"
+  : "${MESHWAY_RELEASE_SEQUENCE:?Set monotonically increasing release sequence}"
+  : "${MESHWAY_RELEASE_EXPIRES:?Set release metadata expiration in ISO UTC}"
+  node scripts/release-tool.mjs sign release "$MESHWAY_RELEASE_KEY_FILE" "$MESHWAY_RELEASE_VERSION" "$MESHWAY_RELEASE_SEQUENCE" "$MESHWAY_RELEASE_EXPIRES"
+fi

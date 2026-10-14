@@ -125,5 +125,11 @@ func (s *Store) AuthorizePeer(ctx context.Context, id peer.ID) error {
 		stream.Reset()
 		return err
 	}
-	return s.rememberDevice(c)
+	if err = s.rememberDevice(c); err != nil {
+		return err
+	}
+	// Best-effort versioned exchange preserves compatibility with older peers.
+	// Offline devices receive signed revocations on their next authenticated link.
+	go func() { _ = s.ExchangeRevocations(context.Background(), id) }()
+	return nil
 }

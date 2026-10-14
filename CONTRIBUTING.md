@@ -8,4 +8,4 @@ Run the checks relevant to the change; `scripts/check.sh` aggregates Go vet/race
 
 Prefer small focused changes and explain the trigger, changed behavior, checks, and limitations. No custom cryptography, inferred consent, fake connected statuses, or undocumented system route changes. App UX should make the common connection path simple and place peer IDs and routing details under Advanced.
 
-The repository URL and package namespace are provisional. Maintainers must set the real owner/release URLs before publishing artifacts.
+The source/release repository is github.com/user-github-me/meshway. Package registries and native signing teams require independently configured owner access.

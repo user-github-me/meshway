@@ -5,7 +5,7 @@
   "type": "module",
   "license": "Apache-2.0",
   "bin": { "meshway": "bin/meshway.js" },
-  "files": ["bin", "src", "README.md", "LICENSE"],
+  "files": ["bin", "src", "release-public.pem", "README.md", "LICENSE"],
   "scripts": { "test": "node --test", "check": "node --check bin/meshway.js && node --check src/installer.js" },
   "engines": { "node": ">=22" }
 }

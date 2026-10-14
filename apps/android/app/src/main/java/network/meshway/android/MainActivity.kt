@@ -24,6 +24,8 @@ class MainActivity : Activity() {
     private lateinit var route: EditText
     private lateinit var local: EditText
     private lateinit var vpn: Switch
+    private lateinit var internet: Switch
+    private var pendingServer: JSONObject? = null
     private lateinit var start: Button
     private lateinit var stop: Button
     private lateinit var save: Button
@@ -63,6 +65,13 @@ class MainActivity : Activity() {
         start = button("Start peer node") { begin() }
         stop = button("Stop") { startService(Intent(this, MeshwayService::class.java).setAction(MeshwayService.STOP)) }
         text("Servers", 20f)
+        internet = Switch(this).apply {
+            text = "Protect all apps with VPN"
+            isChecked = getPreferences(MODE_PRIVATE).getBoolean("internet", true)
+            setOnCheckedChangeListener { _, enabled -> getPreferences(MODE_PRIVATE).edit().putBoolean("internet", enabled).apply() }
+            content.addView(this)
+        }
+        text("Choose a server and connect. VPN sends app traffic and DNS through that server. Switch it off to use only the local SOCKS proxy.")
         catalogMessage = text("Start Meshway to see available servers.")
         serverList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; content.addView(this) }
         button("Refresh servers") { if (NodeState.snapshot.running) startService(Intent(this, MeshwayService::class.java).setAction(MeshwayService.SERVERS)) else toast("Start Meshway first") }
@@ -100,7 +109,7 @@ class MainActivity : Activity() {
         val advancedStart = content.childCount
         text("Optional private IP tunnel", 19f)
         vpn = Switch(this).apply { text = "Enable Android VPN for the configured route"; content.addView(this); editable.add(this) }
-        text("The initial VPN links private IP subnets between peers. It does not provide automatic internet routing, DNS leak protection, or a kill switch. Traffic outside the route uses your usual connection.")
+        text("This separate mode links private subnets between devices. Use the server Connect buttons above for an internet VPN.")
         val preferences = getPreferences(MODE_PRIVATE)
         peer = field("VPN peer ID (required for outgoing packets)", preferences.getString("peer", "") ?: "")
         local = field("Local IPv4 address / prefix", preferences.getString("local", "10.77.0.2/30") ?: "10.77.0.2/30")
@@ -135,7 +144,10 @@ class MainActivity : Activity() {
 
     private fun render(snapshot: Snapshot) {
         if (!::state.isInitialized) return
-        state.text = if (snapshot.busy) "Starting / stopping…" else if (snapshot.running) if (snapshot.vpn) "Private IP tunnel active" else "Peer node running" else "Node stopped"
+        state.text = if (snapshot.busy) "Starting / stopping…" else if (snapshot.running) {
+            if (snapshot.internetVpn) { if (snapshot.vpnConnected) "Internet VPN connected" else "Reconnecting · traffic blocked" }
+            else if (snapshot.vpn) "Private IP tunnel active" else "Peer node running"
+        } else "Node stopped"
         details.text = snapshot.message + if (snapshot.status.isNotEmpty()) "\n" + snapshot.status else ""
         start.isEnabled = !snapshot.running && !snapshot.busy
         start.text = if (snapshot.running) "Peer node running" else "Start Meshway"
@@ -151,7 +163,13 @@ class MainActivity : Activity() {
                 serverList.addView(Button(this).apply {
                     text = "$title · Connect"
                     isEnabled = snapshot.running && !snapshot.busy && server.optBoolean("available") && server.optBoolean("can_connect")
-                    setOnClickListener { startService(Intent(this@MainActivity, MeshwayService::class.java).setAction(MeshwayService.SELECT).putExtra("peer", server.getString("peer_id")).putExtra("address", server.optString("address"))) }
+                    setOnClickListener {
+                        if (internet.isChecked) {
+                            val permission = VpnService.prepare(this@MainActivity)
+                            if (permission != null) { pendingServer = server; startActivityForResult(permission, 102); return@setOnClickListener }
+                        }
+                        selectServer(server)
+                    }
                 })
             }
         } catch (_: Exception) { catalogMessage.text = "Could not read server list." }
@@ -184,6 +202,12 @@ class MainActivity : Activity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == 100 && resultCode == RESULT_OK) startNode()
+        if (requestCode == 102) {
+            val server = pendingServer
+            pendingServer = null
+            if (resultCode == RESULT_OK && server != null) selectServer(server)
+            else toast("VPN permission was not granted.")
+        }
         if (requestCode in 200..201 && resultCode == RESULT_OK && data?.data != null) {
             val uri = data.data!!
             val replace = replaceRecovery
@@ -196,8 +220,9 @@ class MainActivity : Activity() {
                         if (requestCode == 200) {
                             // Start/stop creates the initial account using the real core, without opening listeners.
                             val json = JSONObject(configFile.readText()).put("listen_addresses", org.json.JSONArray()).put("socks_listen", "").put("api_listen", "").put("vpn", JSONObject().put("enabled", false))
-                            Meshway.start(json.toString()).stop()
-                            Meshway.exportRecovery(stateDirectory, temporary.path)
+                            val storageKey = StateVault.key(this)
+                            Meshway.startSecure(json.toString(), storageKey).stop()
+                            Meshway.exportRecoverySecure(stateDirectory, temporary.path, storageKey)
                             contentResolver.openOutputStream(uri, "wt")?.use { output -> temporary.inputStream().use { it.copyTo(output) } } ?: error("Could not open chosen file")
                         } else {
                             contentResolver.openInputStream(uri)?.use { input ->
@@ -206,7 +231,7 @@ class MainActivity : Activity() {
                                 temporary.writeBytes(bytes)
                                 android.system.Os.chmod(temporary.path, 0x180) // 0600, required by core private-file validation.
                             } ?: error("Could not read chosen file")
-                            Meshway.importRecovery(stateDirectory, temporary.path, replace)
+                            Meshway.importRecoverySecure(stateDirectory, temporary.path, replace, StateVault.key(this))
                         }
                     } finally { temporary.delete() }
                     runOnUiThread { toast(if (requestCode == 200) "Recovery key saved. Keep it private." else "Account imported. Start Meshway to enroll this device.") }
@@ -220,6 +245,11 @@ class MainActivity : Activity() {
             .putExtra("vpn", vpn.isChecked).putExtra("peer", peer.text.toString().trim())
             .putExtra("local", local.text.toString().trim()).putExtra("route", route.text.toString().trim())
         startForegroundService(intent)
+    }
+    private fun selectServer(server: JSONObject) {
+        startService(Intent(this, MeshwayService::class.java).setAction(MeshwayService.SELECT)
+            .putExtra("peer", server.getString("peer_id")).putExtra("address", server.optString("address"))
+            .putExtra("internet", internet.isChecked))
     }
     private fun toast(message: String) = Toast.makeText(this, message, Toast.LENGTH_LONG).show()
 }

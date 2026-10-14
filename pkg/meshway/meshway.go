@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/meshway/meshway/internal/account"
-	"github.com/meshway/meshway/internal/config"
-	"github.com/meshway/meshway/internal/core"
-	"github.com/meshway/meshway/internal/state"
+	"github.com/user-github-me/meshway/internal/account"
+	"github.com/user-github-me/meshway/internal/config"
+	"github.com/user-github-me/meshway/internal/core"
+	"github.com/user-github-me/meshway/internal/state"
 )
 
 type Node struct{ node *core.Node }
@@ -66,6 +66,7 @@ func (n *Node) History() (string, error) {
 	b, err := json.Marshal(n.node.Account.History())
 	return string(b), err
 }
+func (n *Node) ClearHistory(synchronize bool) error { return n.node.Account.ClearHistory(synchronize) }
 func (n *Node) SyncAccount(peerID string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()

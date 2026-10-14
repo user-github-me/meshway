@@ -47,7 +47,7 @@ func (n *Node) apiHandler() http.Handler {
 			}
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Vary", "Origin")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
 		}
 		if r.Method == "OPTIONS" {
@@ -57,6 +57,9 @@ func (n *Node) apiHandler() http.Handler {
 		provided := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 		if provided == r.Header.Get("Authorization") || subtle.ConstantTimeCompare([]byte(provided), []byte(n.Config.APIToken)) != 1 {
 			apiError(w, 401, "bearer token required")
+			return
+		}
+		if n.vpnAPI(w, r) {
 			return
 		}
 		switch r.URL.Path {
@@ -114,6 +117,29 @@ func (n *Node) apiHandler() http.Handler {
 			}
 			jsonResponse(w, 200, map[string]any{"devices": n.Account.Devices()})
 		case "/v1/account/history":
+			if r.Method == "DELETE" {
+				var body struct {
+					Synchronize bool `json:"synchronize"`
+				}
+				r.Body = http.MaxBytesReader(w, r.Body, 1024)
+				d := json.NewDecoder(r.Body)
+				d.DisallowUnknownFields()
+				if err := d.Decode(&body); err != nil {
+					apiError(w, 400, "invalid deletion request")
+					return
+				}
+				var extra any
+				if d.Decode(&extra) != io.EOF {
+					apiError(w, 400, "invalid deletion request")
+					return
+				}
+				if err := n.Account.ClearHistory(body.Synchronize); err != nil {
+					apiError(w, 400, err.Error())
+					return
+				}
+				jsonResponse(w, 200, map[string]bool{"ok": true})
+				return
+			}
 			if r.Method != "GET" {
 				apiError(w, 405, "method not allowed")
 				return

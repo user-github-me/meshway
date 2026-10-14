@@ -1,59 +1,54 @@
 # Verified status
 
-Verified on 2026-10-14 from an Apple Silicon Mac. This is an experimental development build, not a completed public VPN service. No remote repository, hosted network, package registry, or app store release has been published.
+Meshway 0.1.0-alpha.1 is an experimental open-source implementation. Source destination: https://github.com/user-github-me/meshway. Website destination: https://user-github-me.github.io/meshway/. Verification performed on 2026-10-14; publication/CI results are recorded below when available. The temporary validation servers are not a permanent public volunteer network.
 
 ## Implemented and exercised
 
 | Area | Evidence |
 | --- | --- |
-| Encrypted peer core | Real libp2p streams, persistent device keys, direct connections, bootstrap reconnect, and circuit-v2 relay payload transfer |
-| SOCKS5 and TCP tunnels | HTTP requests through encrypted peers; named private service forwarding; explicit internet exit/peer/private-target denials |
-| Personal servers | Same recovery root across distinct device IDs; private advertisements; actual HTTP; foreign account and revoked device rejected with history sync disabled |
-| Accounts | Private recovery export/import, root-signed device certificates, signed bounded local events, AES-GCM peer sync, deduplication and revocation checks |
-| Linux packet VPN | Actual `/dev/net/tun` in isolated Docker namespace; encrypted packet → kernel ICMP echo → encrypted return; no host routing changes |
-| Android packet VPN | Live Android 35 arm64 emulator, VpnService consent, real private-subnet TUN, encrypted ICMP packet and kernel reply |
-| Android app | APK install, real embedded core, background foreground-service operation, Android→Mac peer connection, server selection/disconnect, account/recovery file picker flows |
-| macOS app | Native SwiftUI build/launch, ten tests including real daemon acceptance of generated personal-server configuration |
-| Windows app | C#/WPF build and self-contained x64/arm64 publish on macOS; actual Windows runtime remains untested |
-| Website/dashboard | Responsive production build; real account/server list/map/select/disconnect in Chromium; actual personal server integration |
-| Browser extension | Chrome MV3 and Firefox builds; actual isolated Chromium proxy enable and restore; Firefox runtime untested |
-| Real internet egress | Public HTTPS page fetched through native Mac peers and through Mac client → Linux Docker gateway → public internet |
-| Distribution | Six core OS/architecture builds, release archives/checksums, local npm tarball/launcher, non-root prebuilt container startup |
+| Encrypted peer core | Real authenticated libp2p TCP/QUIC, circuit-v2 relays, persistent per-device identities, bounded bootstrap reconnect |
+| SOCKS and service tunnels | Actual HTTP through peers and named private services; SOCKS5 UDP IPv4/IPv6 echo, exit-side domain resolution, source/fragment rejection and control-EOF cleanup |
+| Personal servers | Distinct devices share recovery account, signed membership, private advertisements, wrong-account denial; revoked active UDP/packet sessions closed |
+| Accounts | Signed devices/history; authenticated encrypted optional sync; Keychain/Keystore/DPAPI storage integration; AES-GCM state migration/tampering tests; recovery import/rotation with restart journal; independent signed revocation propagation and signed history deletion |
+| Server catalog | Live list/map, owner-supplied country, authorized click/select; persistent invitations and selection; optional bounded bootstrap directory discovery with authenticated owner requery and private-server exclusion |
+| Linux internet VPN | Real kernel TUN → encrypted peer → gVisor userspace internet exit, IPv4/IPv6 TCP/UDP, kernel DNS, public TLS HTTPS; retained TUN blocks new TCP/DNS after stream loss |
+| Android | Kotlin VpnService full IPv4/IPv6 capture and tunneled DNS; debug APK builds; real Android35 emulator private TUN/ICMP and account/file-picker tests; full internet emulator verification recorded separately |
+| Apple | Swift macOS and iOS apps plus real Network Extension provider; unsigned debug/release Xcode builds; real Swift↔Go packet bridge UDP DNS; 13 Swift tests including real daemon contract |
+| Windows | WPF app, UAC helper, Wintun IPv4/IPv6 routes, NRPT DNS, owned firewall/journal rollback, DPAPI; x64/arm64 builds; 5,000 randomized helper CIDR test cases; Windows runtime requires its CI/device evidence |
+| Browser/web | Responsive real website/dashboard, live account/server list/map/personal selection; 5 actual Chromium integration tests; browser proxy enable/restoration in isolated profile |
+| External internet | Owner Mac → Azure exit → example.com TLS; forced circuit through separate Azure relay → same HTTPS; actual circuit-limited transport observed |
+| Restrictive NAT/recovery | Real separate Linux NAT namespaces reject direct inbound, relayed HTTPS, 80ms±20ms delay and 3% loss, outage detection and restart HTTPS; corresponding public Azure relay/loss/restart checks also pass |
+| Distribution | Six platform binaries; Debian/RPM packages; actual container source build with verified SDK/dependency checksums; full native bundle scripts; Ed25519 signed release metadata with independently bundled pin, rollback/equivocation/expiry/cache validation |
 
-Go tests with the race detector and vet pass. JS has 15 passing unit tests; five real-browser integration tests cover website responsiveness, live daemon pairing/account state, public server list/map, isolated extension proxy restoration, and personal account servers. Swift has ten passing tests. npm audit reports zero vulnerabilities. `govulncheck` reports zero reachable/imported issues; the unused OpenPGP package in an upstream crypto module has an advisory and is not imported by Meshway.
+Go vet and race tests pass across all packages. JavaScript has 20 passing unit tests and five browser integration tests. Swift has 13 passing tests. The native Windows helper has portable routing tests. Earlier packet parser fuzzing exercised 43,535 inputs. Security checks are development validation, not an independent audit.
 
-Real internet testing found and fixed a sequential IPv6 fallback bug. The core now races validated IPv4/IPv6 addresses with bounded staggered attempts, without a second DNS resolution. Traffic counters update while streams remain open. Remote restart tests verify actual disconnected state, periodic bootstrap reconnect, and SOCKS redial after restart.
+External test details: [VALIDATION.md](VALIDATION.md), [cloud evidence](../artifacts/cloud-validation.json), [NAT evidence](../artifacts/nat-validation.json). Azure evidence includes binary SHA-256 and confirmed deletion of every temporary resource group. Host default routes, DNS, active VPN and system proxy were preserved.
 
-Frame parser fuzzing also passed 43,535 generated inputs, including malformed, oversized, and truncated frame seeds.
+## Artifacts and reproduction
 
-## Local build artifacts
+Builds are ignored by Git. Source, build automation, public verification key and sanitized evidence are tracked. Private state/SSH/publisher credentials are excluded.
 
-- `dist/Meshway.app` — unsigned native macOS app and bundled core.
-- `dist/meshway-android-debug.apk` — Kotlin app and arm64/x86_64 Go mobile libraries; debug signed.
-- `dist/Meshway-win-x64/` and `dist/Meshway-win-arm64/` — native Windows packages; unsigned.
-- `apps/web/dist/` — static public website and local dashboard.
-- `apps/extension/dist/chrome/` and `apps/extension/dist/firefox/` — unpacked browser extensions.
-- `dist/bin/` and `release/` — six core binaries, archives, SHA256SUMS, local npm tarball.
-- `artifacts/screenshots/` — browser screenshots generated by integration tests, using temporary test identities.
-
-Artifacts are development output ignored by Git; source/build scripts and screenshots are reviewable. The working GitHub organization/package name is provisional.
-
-## Remaining release work
-
-Multiple real machines on different external networks, restrictive NAT/carrier networks, relayed/hole-punched reconnects, sleep/wake, sustained load, physical Android devices, and Windows runtime testing remain unverified. Local protocol tests and an Android emulator cannot prove universal real-world reliability.
-
-macOS/Windows full-device packet VPN drivers, iOS, general internet routing/NAT in Android/Linux, DNS leak protection, kill switch, UDP SOCKS/IPv6 system routing, polished onboarding, secure native key storage, compromised-root rotation, automatic account discovery, persistent connection preferences, history deletion propagation, abuse accounting, release signatures/updates, signing/notarization/store submission, and an independent security audit remain roadmap items.
-
-The normal multi-stage Docker compiler-image build could not fetch Docker Hub base images due registry timeouts. A prebuilt-runtime image using an existing trusted local Alpine-based image built successfully, ran non-root, and forwarded actual internet HTTPS. Compose validates; systemd installation scripts are syntax checked and have not been installed on a live server. GitHub CI is authored and locally matched where tools are available; no remote CI run has occurred.
-
-## Reproduce
+- `dist/bin/`: six Linux/macOS/Windows core binaries.
+- `dist/Meshway.app`: simple unsigned macOS app; `dist/apple-macos/.../Release/Meshway.app` and `dist/apple-ios/.../Release-iphoneos/Meshway.app`: unsigned native packet VPN app/provider bundles.
+- `dist/meshway-android-debug.apk`: debug-signed Android app.
+- `dist/Meshway-win-x64/`, `dist/Meshway-win-arm64/`: GUI, distinct daemon/helper, Wintun and upstream license.
+- `apps/web/dist/`, `apps/extension/dist/`: website/dashboard and browser extensions.
+- `release/`: packaged artifacts, signed RELEASE.json and detached signature.
 
 ```sh
 ./scripts/check.sh
+# Set CHROMIUM_EXECUTABLE if using an existing compatible Chrome for Testing.
 npm run test:browser --workspace @meshway/web
-python3 scripts/internet-smoke.py --binary dist/meshway
-python3 scripts/internet-smoke.py --binary dist/meshway --container-image YOUR_LOCAL_MESHWAY_IMAGE
-MESHWAY_LAB_IMAGE=YOUR_TRUSTED_LOCAL_ALPINE_IMAGE ./scripts/linux-tun-lab.sh
+MESHWAY_LAB_IMAGE=meshway:network-lab MESHWAY_LAB_INTERNET=1 scripts/linux-ip-exit-lab.sh
+python3 scripts/nat-lab.py --image meshway:network-lab
+# Azure provisioning requires prior owner authorization for temporary charges.
+python3 scripts/cloud-validation.py --provision
 ```
 
-Android's opt-in `TestAndroidKernelTUNEncryptedPing` requires a running emulator, the app's public device ID, and the private route/host invitation printed by the lab test; see its comments and `docs/PLATFORMS.md`. All network labs keep the host default routes, DNS, active VPN, and system proxy unchanged.
+## External release requirements
+
+Actual signed Apple Network Extension operation requires the owner's Apple team/profiles. Authenticode/notarization/store signing requires legitimate owner credentials; automation is implemented but generated development credentials cannot replace them. Physical phones, cellular handover, prolonged sleep/wake/battery behavior, and Windows native VPN routing need their actual platform runtime results. Browser Firefox runtime needs a field run. These cannot be certified by compilation on this Mac.
+
+Packet-loss containment while the core remains running is tested. Process-crash containment depends on platform lockdown/firewall configuration; platform bounds are documented in [VPN.md](VPN.md) and [DESKTOP_VPN.md](DESKTOP_VPN.md). IP egress supports TCP/UDP, not ICMP forwarding or fragmented/extended IP packets. Windows peer-IP exceptions permit other applications to those exact endpoint IPs. Universal NAT reachability, anonymity, and independently audited security are not claimed.
+
+Public bootstrap/relay operation, npm/container registry ownership, browser/app-store listings and long-term volunteer abuse handling are operational work requiring real namespaces and operators. No paid Azure server remains running after validation. An independent reviewer must assess an exact release commit before a production-security claim.

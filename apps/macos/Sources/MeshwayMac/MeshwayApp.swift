@@ -1,6 +1,8 @@
 import AppKit
 import SwiftUI
+#if SWIFT_PACKAGE
 import MeshwayClientCore
+#endif
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -44,6 +46,8 @@ final class AppModel: ObservableObject {
     @Published var accountSyncPeer = ""
     @Published var servers: [Server] = []
     @Published var catalogMessage = "Start Meshway to see available servers."
+    @Published var deviceVPN = true
+    let vpn = AppleVPNController()
     @Published var showSettings = false
     @Published var showPeerDetails = false
     let configURL: URL
@@ -68,6 +72,17 @@ final class AppModel: ObservableObject {
         } else {
             do { try configuration.save(to: configURL) }
             catch { self.error = error.localizedDescription }
+        }
+        if let shared = AppleVPNController.sharedContainer {
+            let previous = URL(fileURLWithPath: configuration.stateDirectory)
+            let destination = shared.appendingPathComponent("node")
+            do {
+                if FileManager.default.fileExists(atPath: previous.path), !FileManager.default.fileExists(atPath: destination.path) {
+                    try FileManager.default.copyItem(at: previous, to: destination)
+                }
+                configuration.stateDirectory = destination.path
+                try configuration.save(to: configURL)
+            } catch { self.error = "Could not migrate private state into the VPN app group: \(error.localizedDescription)" }
         }
         bootstrapText = configuration.bootstrapPeers.joined(separator: "\n")
         allowedPeersText = configuration.allowedPeers.joined(separator: "\n")
@@ -116,6 +131,7 @@ final class AppModel: ObservableObject {
                 let child = Process()
                 child.executableURL = URL(fileURLWithPath: executable)
                 child.arguments = arguments
+                child.environment = ProcessInfo.processInfo.environment.merging(["MESHWAY_STATE_KEY": try NativeStateKey.loadOrCreate().base64EncodedString()]) { _, value in value }
                 let pipe = Pipe()
                 child.standardOutput = pipe
                 child.standardError = pipe
@@ -191,6 +207,7 @@ final class AppModel: ObservableObject {
             let child = Process()
             child.executableURL = URL(fileURLWithPath: executablePath)
             child.arguments = ["daemon", "--config", configURL.path]
+            child.environment = ProcessInfo.processInfo.environment.merging(["MESHWAY_STATE_KEY": try NativeStateKey.loadOrCreate().base64EncodedString()]) { _, value in value }
             child.standardOutput = handle
             child.standardError = handle
             child.terminationHandler = { [weak self] child in
@@ -283,6 +300,21 @@ final class AppModel: ObservableObject {
         busy = true
         defer { busy = false }
         do {
+            if deviceVPN {
+                // The foreground core and extension use the same identity store;
+                // release the foreground lock before the provider opens it.
+                guard let child = process else { throw ClientError.invalidConfiguration("Start Meshway from this app before selecting a device VPN server.") }
+                try await DaemonAPI(configuration: configuration).shutdown()
+                for _ in 0..<50 {
+                    if !child.isRunning { break }
+                    try await Task.sleep(for: .milliseconds(100))
+                }
+                guard !child.isRunning else { throw ClientError.invalidConfiguration("The foreground node is still stopping. Retry after it stops.") }
+                try save()
+                try await vpn.connect(config: configuration.encoded(), peerID: server.peer_id, invitation: server.address)
+                message = "Connecting device VPN to \(server.label)…"
+                return
+            }
             try await DaemonAPI(configuration: configuration).select(server: server)
             message = "Selected \(server.label). Applications can use the Meshway SOCKS connection."
             error = nil
@@ -291,6 +323,9 @@ final class AppModel: ObservableObject {
     }
 
     func disconnect() async {
+        if [.connected, .connecting, .reasserting].contains(vpn.status) {
+            vpn.disconnect(); message = "Disconnecting device VPN…"; return
+        }
         do { try await DaemonAPI(configuration: configuration).disconnect(); message = "Disconnected from the selected exit."; await refresh() }
         catch { self.error = error.localizedDescription }
     }
@@ -348,7 +383,7 @@ struct ContentView: View {
                     }
                 }
                 Spacer()
-                Text("Encrypted SOCKS and TCP tunnels use the shared Go core. Device-wide VPN on macOS requires a future Network Extension.")
+                Text("Device VPN protects IPv4, IPv6, and DNS through the signed packet extension. SOCKS mode connects individual applications.")
                     .font(.caption).foregroundStyle(.secondary)
                 Button("Open configuration folder") { model.openConfiguration() }.buttonStyle(.link)
             }
@@ -357,6 +392,8 @@ struct ContentView: View {
                 VStack(alignment: .leading, spacing: 24) {
                     GroupBox("Servers") {
                         VStack(alignment: .leading, spacing: 14) {
+                            Toggle("Protect this device with VPN", isOn: $model.deviceVPN)
+                            VPNStatusView(vpn: model.vpn)
                             Text(model.catalogMessage).font(.callout).foregroundStyle(.secondary)
                             if let status = model.status, !status.upstream_peer.isEmpty {
                                 Button("Disconnect") { Task { await model.disconnect() } }.disabled(model.busy)
@@ -423,6 +460,19 @@ struct ContentView: View {
                     }
                 }.padding(24)
             }.frame(minWidth: 450)
+        }
+    }
+}
+
+struct VPNStatusView: View {
+    @ObservedObject var vpn: AppleVPNController
+    var body: some View {
+        VStack(alignment: .leading) {
+            Text(vpn.statusText).font(.callout).foregroundStyle(.secondary)
+            if let error = vpn.error { Text(error).foregroundStyle(.red) }
+            if [.connected, .connecting, .reasserting].contains(vpn.status) {
+                Button("Disconnect device VPN") { vpn.disconnect() }
+            }
         }
     }
 }

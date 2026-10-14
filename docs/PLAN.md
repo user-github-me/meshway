@@ -1,6 +1,6 @@
 # Meshway implementation plan
 
-Meshway is an Apache-2.0 open source peer network with a shared Go networking core, desktop and Android clients, a browser proxy extension, a local dashboard, a public website, and installable server packages. The name and GitHub organization are provisional; no repository or public service has been published.
+Meshway is an Apache-2.0 open source peer network with a shared Go networking core, desktop and Android clients, a browser proxy extension, a local dashboard, a public website, and installable server packages. The owner selected Meshway and authorized github.com/user-github-me/meshway publication and temporary Azure validation. Public website deployment uses GitHub Pages; temporary tests do not establish a permanent public network.
 
 ## Product decisions
 
@@ -56,8 +56,8 @@ Configuration is JSON: identity/state directory; libp2p listen addresses; bootst
 - [x] VPN route/setup documentation and explicit no-DNS/no-kill-switch limitations.
 - [x] Small mobile binding API and lifecycle support.
 - [x] Native Android client source and reproducible APK build scripts.
-- [ ] Native macOS/Windows packet VPN integration (later release gate).
-- [ ] iOS app and Network Extension entitlement (later release gate).
+- [x] Native Apple Network Extension and Windows Wintun/helper source, builds, DNS and failure controls; signed runtime validation remains platform evidence.
+- [x] Swift iOS app, Network Extension provider and entitlement/signing automation; unsigned Xcode builds pass.
 
 ### 3 — User-facing apps
 - [x] Real opt-in server catalog, list/map, one-click select/disconnect, and advanced settings.
@@ -74,15 +74,18 @@ Configuration is JSON: identity/state directory; libp2p listen addresses; bootst
 - [x] Linux systemd example and setup script (syntax checked; deployment untested).
 - [x] Cross-platform binary build and release archive script.
 - [x] CI authored; local tests/race/JS/cross compilation/audits pass; remote CI awaits publication.
-- [ ] Signing and notarization instructions; GitHub release publication (requires actual owner/repository).
+- [x] Signed publisher metadata, native signing/notarization scripts, verified artifact packaging and release/Pages automation for the authorized repository.
+- [ ] Record actual GitHub publication/CI and signed owner-native store releases separately.
 
 ### 5 — Harden and verify
 - [x] Test auth, origin restrictions, private target policy, stream limits, malformed SOCKS traffic, and shutdown.
 - [x] Run test → fix → retest loops until local checks pass.
 - [x] Record exact tested platforms and features in `docs/STATUS.md`.
 - [x] Android emulator real TUN and Linux privileged namespace TUN tests.
-- [ ] Different-network/machine NAT/relay testing and physical Android VPN verification.
-- [ ] Independent security review, bandwidth accounting/limits, abuse handling, exit trust/reputation, automatic discovery, updates, DNS leak protection, kill switch, IPv6, UDP proxy, and performance tests before public beta.
+- [x] Real Azure different-machine direct/forced-relay HTTPS, loss/outage/restart and confirmed cleanup; isolated restrictive dual-NAT real HTTPS.
+- [ ] Physical phone/cellular and signed Apple/Windows native route tests with actual hardware/credentials.
+- [x] Bounded sessions/flows, per-peer bandwidth limits/accounting, optional trusted directory discovery, signed update verification, IPv4/IPv6 UDP/TCP, tunneled DNS and kernel failure-containment tests.
+- [ ] Independent audit, sustained hostile-load/performance field assessment, public operator abuse policy/reputation and production signed-platform failure tests.
 
 ### 6 — Private-key accounts and local-first data
 - [x] Generate account recovery key and signed per-device membership certificates.
@@ -91,7 +94,9 @@ Configuration is JSON: identity/state directory; libp2p listen addresses; bootst
 - [x] Optional encrypted peer-to-peer history/device sync authenticated by root signatures and transport identity.
 - [x] CLI and authenticated local API for account status, devices, history, and explicit sync.
 - [x] Test wrong-account rejection, tampered device/event rejection, replay deduplication, recovery import, and offline storage.
-- [ ] Key rotation, keychain-backed master key protection, synchronization conflict UI, automatic discovery, full app onboarding, and cross-device revocation propagation before a mature account release.
+- [x] Offline recovery-root rotation, Keychain/Keystore/DPAPI-protected state key, atomic encrypted migration, persisted invitations, signed history deletion and independent revocation propagation.
+- [x] Native account/file-picker flows and simple server selection with advanced controls; sync conflicts reject explicitly without silent data overwrite.
+- [ ] Mature field-tested onboarding, delegated enrollment without sharing the root, offline-wide compromise recovery and independently reviewed account lifecycle.
 
 ## Completion criteria
 

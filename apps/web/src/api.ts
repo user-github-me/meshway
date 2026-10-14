@@ -30,14 +30,14 @@ export function parseStatus(value: unknown): Status {
   return s as unknown as Status;
 }
 
-export async function apiRequest(base: string, token: string, path: string, body?: unknown): Promise<unknown> {
+export async function apiRequest(base: string, token: string, path: string, body?: unknown, method?: 'GET' | 'POST' | 'DELETE'): Promise<unknown> {
   const safeBase = localEndpoint(base);
   if (!token.trim()) throw new Error('Enter the API token from your local configuration.');
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), body === undefined ? 8_000 : 18_000);
   try {
     const response = await fetch(`${safeBase}${path}`, {
-      method: body === undefined ? 'GET' : 'POST',
+      method: method ?? (body === undefined ? 'GET' : 'POST'),
       headers: { Authorization: `Bearer ${token.trim()}`, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
       body: body === undefined ? undefined : JSON.stringify(body), signal: controller.signal,
       credentials: 'omit', redirect: 'error', cache: 'no-store',

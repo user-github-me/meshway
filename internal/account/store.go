@@ -6,6 +6,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -23,6 +24,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	statevault "github.com/user-github-me/meshway/internal/state"
 )
 
 const maxEvents = 2000
@@ -63,14 +65,19 @@ type Status struct {
 	SyncEnabled bool      `json:"sync_enabled"`
 }
 type state struct {
-	Devices []Device `json:"devices"`
-	Events  []Event  `json:"events"`
+	Deletion *HistoryDeletion `json:"history_deletion,omitempty"`
+	Devices  []Device         `json:"devices"`
+	Events   []Event          `json:"events"`
 }
 type Options struct {
+	StorageKey  []byte
+	OnRevoked   func(string)
 	SyncEnabled bool
 	Label       string
 }
 type Store struct {
+	storageKey  []byte
+	onRevoked   func(string)
 	mu          sync.Mutex
 	dir         string
 	root        ed25519.PrivateKey
@@ -146,11 +153,22 @@ func atomicSave(path string, data []byte) error {
 	return os.Rename(name, path)
 }
 func rootKey(dir string) (ed25519.PrivateKey, error) {
+	key, err := statevault.KeyFromEnvironment()
+	if err != nil {
+		return nil, err
+	}
+	return rootKeyWithStorage(dir, key)
+}
+
+func rootKeyWithStorage(dir string, storageKey []byte) (ed25519.PrivateKey, error) {
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return nil, err
 	}
+	if err := finishTransition(dir, storageKey); err != nil {
+		return nil, err
+	}
 	path := filepath.Join(dir, "account.seed")
-	seed, err := privateRead(path, 32)
+	seed, err := statevault.ReadPrivate(path, 32, storageKey)
 	if err == nil {
 		if len(seed) != 32 {
 			return nil, errors.New("invalid account seed")
@@ -164,14 +182,18 @@ func rootKey(dir string) (ed25519.PrivateKey, error) {
 	if _, err = rand.Read(seed); err != nil {
 		return nil, err
 	}
+	sealed, err := statevault.Seal(path, seed, storageKey)
+	if err != nil {
+		return nil, err
+	}
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if os.IsExist(err) {
-		return rootKey(dir)
+		return rootKeyWithStorage(dir, storageKey)
 	}
 	if err != nil {
 		return nil, err
 	}
-	if _, err = f.Write(seed); err != nil {
+	if _, err = f.Write(sealed); err != nil {
 		f.Close()
 		os.Remove(path)
 		return nil, err
@@ -186,13 +208,13 @@ func New(dir string, h host.Host, options Options) (*Store, error) {
 	if h == nil {
 		return nil, errors.New("account requires a device host")
 	}
-	root, err := rootKey(dir)
+	root, err := rootKeyWithStorage(dir, options.StorageKey)
 	if err != nil {
 		return nil, err
 	}
-	s := &Store{dir: dir, root: root, host: h, syncEnabled: options.SyncEnabled, streams: make(map[network.Stream]struct{}), data: state{Devices: []Device{}, Events: []Event{}}}
+	s := &Store{onRevoked: options.OnRevoked, storageKey: append([]byte(nil), options.StorageKey...), dir: dir, root: root, host: h, syncEnabled: options.SyncEnabled, streams: make(map[network.Stream]struct{}), data: state{Devices: []Device{}, Events: []Event{}}}
 	path := filepath.Join(dir, "account.json")
-	b, err := privateRead(path, maxStateSize)
+	b, err := statevault.ReadPrivate(path, maxStateSize, s.storageKey)
 	if err == nil {
 		if err = json.Unmarshal(b, &s.data); err != nil {
 			return nil, err
@@ -236,6 +258,7 @@ func New(dir string, h host.Host, options Options) (*Store, error) {
 	}
 	h.SetStreamHandler(SyncProtocol, s.handleSync)
 	h.SetStreamHandler(AuthProtocol, s.handleAuth)
+	h.SetStreamHandler(RevocationProtocol, s.handleRevocations)
 	return s, nil
 }
 func (s *Store) save() error {
@@ -246,7 +269,7 @@ func (s *Store) save() error {
 	if len(b) > maxStateSize {
 		return errors.New("account state size limit reached")
 	}
-	return atomicSave(filepath.Join(s.dir, "account.json"), b)
+	return statevault.SavePrivate(filepath.Join(s.dir, "account.json"), b, s.storageKey)
 }
 func (s *Store) Status() Status {
 	s.mu.Lock()
@@ -304,11 +327,20 @@ func (s *Store) Revoke(peerID string) error {
 	for i := range s.data.Devices {
 		d := &s.data.Devices[i]
 		if d.PeerID == peerID {
+			old := *d
 			now := time.Now().UTC()
 			d.Revoked = true
 			d.RevokedAt = &now
 			d.RevocationSignature = encode(ed25519.Sign(s.root, revocationMessage(*d)))
-			return s.save()
+			if err := s.save(); err != nil {
+				*d = old
+				return err
+			}
+			if s.onRevoked != nil {
+				go s.onRevoked(peerID)
+			}
+			go s.broadcastRevocations()
+			return nil
 		}
 	}
 	return errors.New("unknown device")
@@ -323,6 +355,7 @@ func (s *Store) Close() error {
 	s.mu.Unlock()
 	s.host.RemoveStreamHandler(SyncProtocol)
 	s.host.RemoveStreamHandler(AuthProtocol)
+	s.host.RemoveStreamHandler(RevocationProtocol)
 	for _, stream := range streams {
 		stream.Reset()
 	}
@@ -331,7 +364,15 @@ func (s *Store) Close() error {
 
 // ExportRecovery writes an account recovery secret to a new private file.
 func ExportRecovery(dir, output string) error {
-	root, err := rootKey(dir)
+	key, err := statevault.KeyFromEnvironment()
+	if err != nil {
+		return err
+	}
+	return ExportRecoveryWithKey(dir, output, key)
+}
+
+func ExportRecoveryWithKey(dir, output string, key []byte) error {
+	root, err := rootKeyWithStorage(dir, key)
 	if err != nil {
 		return err
 	}
@@ -347,6 +388,14 @@ func ExportRecovery(dir, output string) error {
 // ImportRecovery must run with the daemon stopped. It preserves the device peer
 // key and reissues its account certificate, while clearing the old local account.
 func ImportRecovery(dir, input string, force bool) error {
+	key, err := statevault.KeyFromEnvironment()
+	if err != nil {
+		return err
+	}
+	return ImportRecoveryWithKey(dir, input, force, key)
+}
+
+func ImportRecoveryWithKey(dir, input string, force bool, key []byte) error {
 	info, err := os.Lstat(input)
 	if err != nil {
 		return err
@@ -370,16 +419,19 @@ func ImportRecovery(dir, input string, force bool) error {
 		return err
 	}
 	path := filepath.Join(dir, "account.seed")
-	if _, err = os.Stat(path); err == nil && !force {
-		return errors.New("account exists; explicit --force required to replace it")
+	if previous, readErr := statevault.ReadPrivate(path, 32, key); readErr == nil {
+		// Restoring the same account preserves its signed device certificates and
+		// local history; reissuing a different certificate causes sync conflicts.
+		if subtle.ConstantTimeCompare(previous, seed) == 1 {
+			return nil
+		}
+		if !force {
+			return errors.New("account exists; explicit --force required to replace it")
+		}
+	} else if !os.IsNotExist(readErr) {
+		return readErr
 	}
-	if err = atomicSave(path, seed); err != nil {
-		return err
-	}
-	if err = os.Remove(filepath.Join(dir, "account.json")); err != nil && !os.IsNotExist(err) {
-		return err
-	}
-	return nil
+	return replaceRoot(dir, seed, key)
 }
 
 func verifyCertificate(c Certificate, accountID string) error {
@@ -412,6 +464,11 @@ func verifyCertificate(c Certificate, accountID string) error {
 	return nil
 }
 func (s *Store) validateState(data state) error {
+	if data.Deletion != nil {
+		if err := s.verifyDeletion(*data.Deletion); err != nil {
+			return err
+		}
+	}
 	if len(data.Devices) > maxDevices || len(data.Events) > maxEvents {
 		return errors.New("account dataset exceeds limits")
 	}

@@ -10,6 +10,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
 using Microsoft.Win32;
+using Meshway.Security;
 
 namespace Meshway;
 
@@ -19,6 +20,7 @@ public partial class MainWindow : Window
     private readonly HttpClient client = new() { Timeout = TimeSpan.FromSeconds(5) };
     private NativeConfiguration config = null!;
     private Process? ownedProcess;
+    private readonly DeviceVPNController deviceVPN = new();
     private bool busy;
     private bool refreshing;
     private bool live;
@@ -90,7 +92,8 @@ public partial class MainWindow : Window
             var status = await Request("v1/status");
             live = true;
             StateText.Text = "Daemon running";
-            if (status?["upstream_peer"]?.GetValue<string>() is { Length: > 0 }) StateText.Text = status?["upstream_connected"]?.GetValue<bool>() == true ? "Selected peer connection is live" : "Selected peer offline · reconnects on traffic";
+            if (status?["vpn"]?["active"]?.GetValue<bool>() == true && deviceVPN.Running) StateText.Text = "Device VPN connected";
+            else if (status?["upstream_peer"]?.GetValue<string>() is { Length: > 0 }) StateText.Text = status?["upstream_connected"]?.GetValue<bool>() == true ? "Selected peer connection is live" : "Selected peer offline · reconnects on traffic";
             StatusText.Text = $"Peer: {status?["peer_id"]}\nSOCKS5: {status?["socks_listen"]}\nPeers: {status?["peers"]?.AsArray().Count ?? 0}\nSent: {status?["bytes_sent"]} bytes · Received: {status?["bytes_received"]} bytes\n" + string.Join("\n", status?["addresses"]?.AsArray().Select(x => x!.GetValue<string>()) ?? []);
             try { await RefreshServers(status?["upstream_peer"]?.GetValue<string>() ?? ""); }
             catch (Exception error) { CatalogMessage.Text = "Server list unavailable: " + error.Message; ServerList.Children.Clear(); }
@@ -124,7 +127,18 @@ public partial class MainWindow : Window
             DockPanel.SetDock(connect, Dock.Right);
             connect.Click += async (_, _) =>
             {
-                try { await Request("v1/select", JsonSerializer.Serialize(new { peer_id = id, address })); MessageText.Text = "Selected " + label + ". Applications can use the Meshway SOCKS connection."; await Refresh(true); }
+                try {
+                    if (DeviceVPNMode.IsChecked == true) {
+                        var foreground = ownedProcess ?? throw new InvalidOperationException("Start Meshway from this app before connecting a device VPN.");
+                        await Request("v1/shutdown", "{}");
+                        await foreground.WaitForExitAsync();
+                        live = false;
+                        await deviceVPN.Start(configPath, id, address);
+                        MessageText.Text = "Device VPN connected to " + label + ".";
+                        await Refresh(true);
+                        return;
+                    }
+                    await Request("v1/select", JsonSerializer.Serialize(new { peer_id = id, address })); MessageText.Text = "Selected " + label + ". Applications can use the Meshway SOCKS connection."; await Refresh(true); }
                 catch (Exception error) { MessageText.Text = error.Message; }
             };
             row.Children.Add(connect);
@@ -144,6 +158,7 @@ public partial class MainWindow : Window
             var executable = ExecutablePath.Text.Trim();
             if (!File.Exists(executable)) throw new FileNotFoundException("Choose the built Meshway daemon executable first.");
             var info = new ProcessStartInfo(executable) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardError = true, RedirectStandardOutput = true };
+            info.Environment["MESHWAY_STATE_KEY"] = Convert.ToBase64String(StateKey.LoadOrCreate(configPath));
             info.ArgumentList.Add("daemon"); info.ArgumentList.Add("--config"); info.ArgumentList.Add(configPath);
             var process = new Process { StartInfo = info, EnableRaisingEvents = true };
             process.OutputDataReceived += (_, args) => Log(args.Data);
@@ -182,7 +197,7 @@ public partial class MainWindow : Window
     private async void RefreshClicked(object sender, RoutedEventArgs e) => await Refresh(true);
     private async void DisconnectClicked(object sender, RoutedEventArgs e)
     {
-        try { await Request("v1/disconnect", "{}"); MessageText.Text = "Disconnected from the selected exit."; await Refresh(true); }
+        try { if (deviceVPN.Running) { await deviceVPN.Stop(); MessageText.Text = "Device VPN disconnected; network settings restored."; await Refresh(false); return; } await Request("v1/disconnect", "{}"); MessageText.Text = "Disconnected from the selected exit."; await Refresh(true); }
         catch (Exception error) { MessageText.Text = error.Message; }
     }
     private async Task RefreshAccount()
@@ -226,6 +241,7 @@ public partial class MainWindow : Window
             async Task Run(string action, bool withFile)
             {
                 var info = new ProcessStartInfo(executable) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardError = true, RedirectStandardOutput = true };
+                info.Environment["MESHWAY_STATE_KEY"] = Convert.ToBase64String(StateKey.LoadOrCreate(configPath));
                 info.ArgumentList.Add("account"); info.ArgumentList.Add(action); info.ArgumentList.Add("--config"); info.ArgumentList.Add(configPath);
                 if (withFile) { info.ArgumentList.Add(action == "export" ? "--output" : "--input"); info.ArgumentList.Add(file); }
                 if (withFile && replaceAccount) info.ArgumentList.Add("--force");
@@ -263,6 +279,7 @@ public partial class MainWindow : Window
     private void OnClosing(object? sender, CancelEventArgs e)
     {
         timer.Stop();
+        deviceVPN.SignalStop();
         if (ownedProcess is { HasExited: false }) { try { ownedProcess.Kill(true); } catch (InvalidOperationException) { } }
         client.Dispose();
     }

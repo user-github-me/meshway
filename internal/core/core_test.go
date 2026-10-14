@@ -21,8 +21,8 @@ import (
 
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/p2p/protocol/circuitv2/client"
-	"github.com/meshway/meshway/internal/account"
-	"github.com/meshway/meshway/internal/config"
+	"github.com/user-github-me/meshway/internal/account"
+	"github.com/user-github-me/meshway/internal/config"
 )
 
 func testConfig(t *testing.T) config.Config {

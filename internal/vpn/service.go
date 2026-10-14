@@ -21,6 +21,14 @@ type Options struct {
 	AllowedPeers []string
 	MTU          int
 	Authorize    func(context.Context, peer.ID) bool
+	// Exit explicitly permits approved peers to use userspace Internet egress.
+	Exit                bool
+	AllowPrivateTargets bool
+	DNSResolver         string
+	MaxExitSessions     int
+	MaxFlowsPerSession  int
+	BytesPerSecond      int
+	AccountBytes        func(sent, received uint64)
 }
 
 // Service connects one local packet device to one authorized peer at a time.
@@ -37,6 +45,7 @@ type Service struct {
 	cancel    context.CancelFunc
 	ctx       context.Context
 	wg        sync.WaitGroup
+	exit      *exitService
 }
 
 func New(h host.Host, options Options) (*Service, error) {
@@ -60,6 +69,13 @@ func New(h host.Host, options Options) (*Service, error) {
 		s.allowed[p] = true
 	}
 	h.SetStreamHandler(Protocol, s.accept)
+	var err error
+	s.exit, err = newExitService(h, options)
+	if err != nil {
+		h.RemoveStreamHandler(Protocol)
+		cancel()
+		return nil, err
+	}
 	return s, nil
 }
 
@@ -278,6 +294,9 @@ func (s *Service) pump(stream network.Stream, device io.ReadWriteCloser) {
 }
 
 func (s *Service) Close() error {
+	if s.exit != nil {
+		_ = s.exit.close()
+	}
 	s.mu.Lock()
 	if s.closed {
 		s.mu.Unlock()
