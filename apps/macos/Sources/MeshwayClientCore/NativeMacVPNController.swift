@@ -112,6 +112,8 @@ public final class NativeMacVPNController: ObservableObject {
     }
     private var lifecycle: LifecycleHooks?
     private var ownedLauncher: OwnedLauncher?
+    private var lifecycleGeneration: UInt64 = 0
+    private var startAttempt: UUID?
 
     public init(bundle: Bundle = .main) {
         // This marker is intentionally absent until the root agent records an
@@ -121,6 +123,10 @@ public final class NativeMacVPNController: ObservableObject {
     public func start(configuration: Configuration, configURL: URL, peerID: String, peerAddresses: [String]) async throws {
         guard available else { throw ClientError.invalidConfiguration("Administrator device VPN is awaiting native route and DNS qualification. SOCKS and personal tunnels remain available.") }
         guard state == .disconnected, let core = Bundle.main.url(forResource:"meshway",withExtension:nil) else { throw ClientError.invalidConfiguration("Stop the previous device VPN and install the complete Meshway app first.") }
+        lifecycleGeneration &+= 1
+        let preparationGeneration = lifecycleGeneration
+        let attempt = UUID(); startAttempt = attempt
+        defer { if startAttempt == attempt { startAttempt = nil } }
         state = .authorizing; error = nil
         do {
             let ips = try await Task.detached {
@@ -140,19 +146,29 @@ public final class NativeMacVPNController: ObservableObject {
                 for host in hosts { for ip in try Self.resolve(host) { addresses.insert(ip) } }
                 return Array(addresses)
             }.value
+            guard lifecycleGeneration == preparationGeneration, state == .authorizing else { throw ClientError.invalidConfiguration("Device VPN preparation was canceled before launching the administrator helper.") }
             let candidate = try NativeMacVPNPlan(bundledExecutable:core,configuration:configURL,peerID:peerID,underlayIPs:ips,parentPID:getpid())
             // Root-install launch is supplied only once the helper's exact
             // readiness/ownership contract has passed the hosted lab.
             self.configuration = configuration
-            try await launchVerifiedHelper(candidate)
-        } catch { if launcher == nil { state = .disconnected }; self.error = error.localizedDescription; throw error }
+            try await launchVerifiedHelper(candidate, preparationGeneration: preparationGeneration)
+        } catch {
+            // A canceled preparation may return after another start has begun.
+            // Its error must not reset that newer attempt's state.
+            if startAttempt == attempt {
+                if launcher == nil { state = .disconnected }
+                self.error = error.localizedDescription
+            }
+            throw error
+        }
     }
-    private func launchVerifiedHelper(_ plan: NativeMacVPNPlan) async throws {
+    private func launchVerifiedHelper(_ plan: NativeMacVPNPlan, preparationGeneration: UInt64) async throws {
         let digest = try await Task.detached { SHA256.hash(data:try Data(contentsOf:plan.bundledExecutable)).map { String(format:"%02x",$0) }.joined() }.value
+        guard lifecycleGeneration == preparationGeneration, state == .authorizing else { throw ClientError.invalidConfiguration("Device VPN preparation was canceled before launching the administrator helper.") }
         let (script, installed) = try plan.installAndStartScript(sha256:digest)
-        let (child,diagnostics) = try Self.appleScript(script)
         guard let configuration else { throw ClientError.invalidConfiguration("Device VPN configuration is unavailable.") }
         let api = try DaemonAPI(configuration:configuration)
+        let (child,diagnostics) = try Self.appleScript(script)
         launcher = child
         let hooks = LifecycleHooks(launch:{ _ in OwnedLauncher(isRunning:{child.isRunning},end:{await Self.endOwnedLauncher(child)},detail:{diagnostics.text}) },observe:{
             let value = try await api.status().vpn
@@ -162,21 +178,31 @@ public final class NativeMacVPNController: ObservableObject {
     }
     /// Production and injected checks use the same ownership/readiness loop.
     func beginLifecycle(plan: NativeMacVPNPlan, installed: URL, script: String, hooks: LifecycleHooks) async throws {
+        lifecycleGeneration &+= 1
+        let generation = lifecycleGeneration
         self.plan = plan; installedExecutable = installed; lifecycle = hooks; state = .connecting
         let child = try hooks.launch(script); ownedLauncher = child
         let deadline = hooks.now() + hooks.timeout
         while hooks.now() < deadline {
+            guard lifecycleGeneration == generation else { throw ClientError.invalidConfiguration("The device VPN start was canceled by owned cleanup.") }
             guard child.isRunning() else { state = .recoveryRequired; throw ClientError.invalidConfiguration("The administrator helper ended before capture was confirmed. Review macOS authorization and restore owned networking before retrying. " + child.detail()) }
             let status = try? await hooks.observe()
+            // Stop can run while the API observation is in flight, and the
+            // launcher can exit before that older readiness response arrives.
+            guard lifecycleGeneration == generation else { throw ClientError.invalidConfiguration("The device VPN start was canceled by owned cleanup.") }
+            guard child.isRunning() else { state = .recoveryRequired; throw ClientError.invalidConfiguration("The administrator helper ended before capture was confirmed. Review macOS authorization and restore owned networking before retrying. " + child.detail()) }
             if status?.ready == true, status?.peerID == plan.peerID, status?.instance == plan.captureInstance {
                 device = status?.device; state = status?.active == true ? .connected : .reconnecting
                 monitor = Task { [weak self] in
                     while !Task.isCancelled {
                         await hooks.pause()
                         guard let self else { return }
+                        guard !Task.isCancelled, self.lifecycleGeneration == generation else { return }
                         guard child.isRunning() else { self.state = .recoveryRequired; self.error = "The device VPN helper ended. Explicitly restore its owned routes and resolver before reconnecting."; return }
                         let status = try? await hooks.observe()
-                        self.state = status?.active == true && status?.ready == true && status?.instance == plan.captureInstance ? .connected : .reconnecting
+                        guard !Task.isCancelled, self.lifecycleGeneration == generation else { return }
+                        guard child.isRunning() else { self.state = .recoveryRequired; self.error = "The device VPN helper ended. Explicitly restore its owned routes and resolver before reconnecting."; return }
+                        self.state = status?.active == true && status?.ready == true && status?.peerID == plan.peerID && status?.instance == plan.captureInstance ? .connected : .reconnecting
                     }
                 }
                 return
@@ -184,6 +210,7 @@ public final class NativeMacVPNController: ObservableObject {
             await hooks.pause()
         }
         await child.end()
+        guard lifecycleGeneration == generation else { throw ClientError.invalidConfiguration("The device VPN start was canceled by owned cleanup.") }
         // Do not kill shared authorization services. Scoped cleanup below
         // decides whether any late-started root helper owns this journal.
         state = .recoveryRequired
@@ -193,9 +220,17 @@ public final class NativeMacVPNController: ObservableObject {
     }
     public func stop() async throws {
         guard let plan, let installedExecutable else {
+            if state == .authorizing, launcher == nil {
+                lifecycleGeneration &+= 1
+                startAttempt = nil
+                state = .disconnected; error = nil; configuration = nil
+                return
+            }
             guard state == .disconnected else { throw ClientError.invalidConfiguration("Use explicit device VPN cleanup for this configuration before stopping the daemon.") }
             return
         }
+        lifecycleGeneration &+= 1
+        startAttempt = nil
         state = .restoring; monitor?.cancel(); monitor = nil
         do {
             guard let lifecycle else { throw ClientError.invalidConfiguration("The device VPN lifecycle owner is unavailable. Keep the daemon running and restore this configuration explicitly.") }
@@ -205,6 +240,7 @@ public final class NativeMacVPNController: ObservableObject {
             guard !cleanup.active, cleanup.running != true, cleanup.network_cleanup_pending != true else { throw ClientError.invalidConfiguration("Owned device VPN cleanup remains pending. Keep the daemon running and retry restoration.") }
             if let ownedLauncher { await ownedLauncher.end() }
             self.launcher = nil; ownedLauncher = nil; state = .disconnected; device = nil; error = nil
+            self.plan = nil; self.installedExecutable = nil; self.lifecycle = nil; self.configuration = nil
         } catch { state = .recoveryRequired; self.error = error.localizedDescription; throw error }
     }
     nonisolated private static func cleanupVerified(_ plan: NativeMacVPNPlan,_ installedExecutable: URL) async throws -> String {

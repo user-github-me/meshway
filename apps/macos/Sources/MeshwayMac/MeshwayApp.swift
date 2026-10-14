@@ -538,7 +538,7 @@ final class AppModel: ObservableObject {
                     try await DaemonAPI(configuration:configuration).select(server:server)
                     try save()
                     try await nativeVPN.start(configuration:configuration,configURL:configURL,peerID:server.peer_id,peerAddresses:(server.addresses ?? []) + [server.address])
-                    message = "Device VPN capture verified. Internet traffic uses your selected Meshway server."
+                    message = nativeVPN.state == .connected ? "Device VPN capture is active. Your selected server is connected." : "Device VPN capture is retained while your server reconnects."
                     return
                 }
                 // The foreground core and extension use the same identity store;

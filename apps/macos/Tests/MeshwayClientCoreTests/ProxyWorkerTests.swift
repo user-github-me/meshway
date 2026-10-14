@@ -28,7 +28,7 @@ final class ProxyWorkerTests: XCTestCase {
         assert blocked['updates'][0]['keys']['host']=='127.0.0.1'
         \(secondReply)
         """
-        let worker = ProxyWorkerClient(executable: python, arguments: ["-c",script,pidFile.path], timeout: 2)
+        let worker = ProxyWorkerClient(executable: python, arguments: ["-c",script,pidFile.path], timeout: 10)
         // Complete an actual framed transaction before starting the deadline
         // assertion. Slow interpreter startup must not stand in for a worker
         // already processing the transaction being tested.
@@ -52,7 +52,7 @@ final class ProxyWorkerTests: XCTestCase {
             result=json.dumps({'id':request['id'],'ok':True,'error':None}).encode()
             sys.stdout.buffer.write(struct.pack('>I',len(result))+result);sys.stdout.buffer.flush()
         """
-        let client = ProxyWorkerClient(executable: python, arguments: ["-c", script], timeout: 2)
+        let client = ProxyWorkerClient(executable: python, arguments: ["-c", script], timeout: 10)
         try client.apply(updates()); try client.apply(updates())
     }
     func testPendingAuthorizationTimeoutKillsOnlyOwnedChildAndKeepsRecoveryJournal() throws {
@@ -64,7 +64,7 @@ final class ProxyWorkerTests: XCTestCase {
             if args[0] == "-getsocksfirewallproxy" { return "Enabled: No\nServer: \nPort: 0\nAuthenticated Proxy Enabled: 0\n" }
             applyCount += 1
             let updates = try JSONDecoder().decode([SystemProxyController.Update].self, from: Data(base64Encoded: args[1])!)
-            try worker.apply(updates); return ""
+            try worker.apply(updates, operationTimeout: 2); return ""
         })
         let start = Date()
         XCTAssertThrowsError(try controller.enable(host: "127.0.0.1", port: 1080)) { error in
@@ -85,7 +85,7 @@ final class ProxyWorkerTests: XCTestCase {
             let dir = try directory(); defer { try? FileManager.default.removeItem(at: dir) }
             let (worker, pid) = try readyWorker(directory: dir, secondReply: reply + ";time.sleep(60)")
             let start = Date()
-            XCTAssertThrowsError(try worker.apply(updates())) { error in
+            XCTAssertThrowsError(try worker.apply(updates(), operationTimeout: 2)) { error in
                 XCTAssertTrue(error is ProxyWorkerFailure)
                 XCTAssertTrue(error.localizedDescription.contains(expected))
             }
@@ -97,25 +97,25 @@ final class ProxyWorkerTests: XCTestCase {
         let dir = try directory(); defer { try? FileManager.default.removeItem(at: dir) }
         let reply = "data=b'{invalid';sys.stdout.buffer.write(struct.pack('>I',len(data))+data);sys.stdout.buffer.flush();time.sleep(60)"
         let (worker, pid) = try readyWorker(directory: dir, secondReply: reply)
-        XCTAssertThrowsError(try worker.apply(updates())) { error in
+        XCTAssertThrowsError(try worker.apply(updates(), operationTimeout: 2)) { error in
             XCTAssertTrue(error is ProxyWorkerFailure)
             XCTAssertTrue(error.localizedDescription.contains("ended unexpectedly"))
         }
         assertReaped(pid)
     }
     func testReadOnlySettingsChildIsBoundedAndCapsOutputWhileReading() throws {
-        let text = try ProxyWorkerClient.readCommand(executable: python, arguments: ["-c", "print('owned read only')"], timeout: 2)
+        let text = try ProxyWorkerClient.readCommand(executable: python, arguments: ["-c", "print('owned read only')"], timeout: 10)
         XCTAssertEqual(text, "owned read only\n")
         for (script, expected) in [
             ("import time;time.sleep(60)", "timed out"),
             ("import sys;sys.stdout.write('x'*131073);sys.stdout.flush()", "too much data")
         ] {
             let start = Date()
-            XCTAssertThrowsError(try ProxyWorkerClient.readCommand(executable: python, arguments: ["-c", script], timeout: 2)) { error in
+            XCTAssertThrowsError(try ProxyWorkerClient.readCommand(executable: python, arguments: ["-c", script], timeout: 6)) { error in
                 XCTAssertTrue(error is ProxyWorkerFailure)
                 XCTAssertTrue(error.localizedDescription.contains(expected))
             }
-            XCTAssertLessThan(Date().timeIntervalSince(start), 5)
+            XCTAssertLessThan(Date().timeIntervalSince(start), 9)
         }
     }
 }

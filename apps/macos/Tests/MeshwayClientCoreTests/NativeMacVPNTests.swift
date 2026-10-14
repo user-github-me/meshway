@@ -3,6 +3,22 @@ import XCTest
 @testable import MeshwayClientCore
 
 final class NativeMacVPNTests: XCTestCase {
+    @MainActor private final class ObservationGate {
+        private var continuation: CheckedContinuation<Void,Never>?
+        private var arrival: CheckedContinuation<Void,Never>?
+        private var entered = false
+        func pause() async {
+            await withCheckedContinuation { continuation in
+                self.continuation = continuation; entered = true
+                arrival?.resume(); arrival = nil
+            }
+        }
+        func waitUntilEntered() async {
+            if entered { return }
+            await withCheckedContinuation { arrival = $0 }
+        }
+        func release() { continuation?.resume(); continuation = nil }
+    }
     private func plan(core: String = "/Applications/Meshway's App.app/Contents/Resources/meshway", config: String = "/Users/test/Meshway config.json") throws -> NativeMacVPNPlan {
         try NativeMacVPNPlan(bundledExecutable:URL(fileURLWithPath:core),configuration:URL(fileURLWithPath:config),peerID:"12D3KooW123456789abcdefghijk",underlayIPs:["203.0.113.7","2001:db8::7"],parentPID:321)
     }
@@ -67,5 +83,54 @@ final class NativeMacVPNTests: XCTestCase {
         let hooks = NativeMacVPNController.LifecycleHooks(launch:{ _ in .init(isRunning:{!ended},end:{ended=true}) },observe:{ .init(active:false,ready:false,peerID:plan.peerID,instance:nil,device:nil) },cleanup:{ plan,_ in cleanupInstance=plan.captureInstance;return "{\"active\":false}" },pause:{clock += 1},now:{clock},timeout:2)
         do {try await controller.beginLifecycle(plan:plan,installed:URL(fileURLWithPath:"/private/var/db/meshway-native/test"),script:"never executed",hooks:hooks);XCTFail("Readiness never arrived")} catch {}
         XCTAssertTrue(ended);XCTAssertEqual(cleanupInstance,plan.captureInstance);XCTAssertEqual(controller.state,.disconnected)
+    }
+    @MainActor func testDelayedMonitorReplyCannotReactivateCaptureAfterStop() async throws {
+        let plan = try plan(); let controller = NativeMacVPNController(); let gate = ObservationGate()
+        var observations = 0; var running = true
+        let hooks = NativeMacVPNController.LifecycleHooks(launch:{ _ in .init(isRunning:{running},end:{running=false}) },observe:{
+            observations += 1
+            if observations == 2 { await gate.pause() }
+            return .init(active:true,ready:true,peerID:plan.peerID,instance:plan.captureInstance,device:"utun99")
+        },cleanup:{ _,_ in "{\"active\":false}" },pause:{await Task.yield()},now:{ProcessInfo.processInfo.systemUptime},timeout:1)
+        try await controller.beginLifecycle(plan:plan,installed:URL(fileURLWithPath:"/private/var/db/meshway-native/test"),script:"never executed",hooks:hooks)
+        await gate.waitUntilEntered()
+        try await controller.stop()
+        XCTAssertEqual(controller.state,.disconnected); XCTAssertFalse(running)
+        gate.release()
+        // Allow the captured, pre-stop reply to return to the actual monitor.
+        for _ in 0..<5 { await Task.yield() }
+        XCTAssertEqual(controller.state,.disconnected,"An observation begun before cleanup cannot revive its stopped capture")
+        XCTAssertFalse(controller.active)
+    }
+    @MainActor func testLauncherLossDuringReadinessObservationCannotReportConnected() async throws {
+        let plan = try plan(); let controller = NativeMacVPNController(); let gate = ObservationGate()
+        var running = true
+        let hooks = NativeMacVPNController.LifecycleHooks(launch:{ _ in .init(isRunning:{running},end:{running=false}) },observe:{
+            await gate.pause()
+            return .init(active:true,ready:true,peerID:plan.peerID,instance:plan.captureInstance,device:"utun99")
+        },cleanup:{ _,_ in "{\"active\":false}" },pause:{await Task.yield()},now:{ProcessInfo.processInfo.systemUptime},timeout:1)
+        let starting = Task {
+            try await controller.beginLifecycle(plan:plan,installed:URL(fileURLWithPath:"/private/var/db/meshway-native/test"),script:"never executed",hooks:hooks)
+        }
+        await gate.waitUntilEntered(); running = false; gate.release()
+        do { try await starting.value; XCTFail("A readiness reply cannot establish a capture whose owning launcher has already ended") } catch {}
+        XCTAssertEqual(controller.state,.recoveryRequired)
+        try await controller.stop(); XCTAssertEqual(controller.state,.disconnected)
+    }
+    @MainActor func testStopDuringDelayedStartCannotAcceptItsOldReadinessReply() async throws {
+        let plan = try plan(); let controller = NativeMacVPNController(); let gate = ObservationGate()
+        var running = true; var cleanupCount = 0
+        let hooks = NativeMacVPNController.LifecycleHooks(launch:{ _ in .init(isRunning:{running},end:{running=false}) },observe:{
+            await gate.pause()
+            return .init(active:true,ready:true,peerID:plan.peerID,instance:plan.captureInstance,device:"utun99")
+        },cleanup:{ _,_ in cleanupCount += 1; return "{\"active\":false}" },pause:{await Task.yield()},now:{ProcessInfo.processInfo.systemUptime},timeout:1)
+        let starting = Task {
+            try await controller.beginLifecycle(plan:plan,installed:URL(fileURLWithPath:"/private/var/db/meshway-native/test"),script:"never executed",hooks:hooks)
+        }
+        await gate.waitUntilEntered(); try await controller.stop(); gate.release()
+        do { try await starting.value; XCTFail("Cleanup must invalidate the pending start's readiness") } catch {}
+        XCTAssertEqual(controller.state,.disconnected); XCTAssertFalse(running)
+        try await controller.stop()
+        XCTAssertEqual(cleanupCount,1,"Completed cleanup must release its old lifecycle rather than execute it on a later Stop")
     }
 }

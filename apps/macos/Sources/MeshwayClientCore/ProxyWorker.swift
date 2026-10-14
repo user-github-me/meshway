@@ -76,15 +76,19 @@ final class ProxyWorkerClient: @unchecked Sendable {
         return String(decoding: result, as: UTF8.self)
     }
 
-    func apply(_ updates: [SystemProxyController.Update]) throws {
+    func apply(_ updates: [SystemProxyController.Update], operationTimeout: TimeInterval? = nil) throws {
         mutex.lock(); defer { mutex.unlock() }
+        let transactionTimeout = operationTimeout ?? timeout
+        guard transactionTimeout.isFinite, transactionTimeout > 0, transactionTimeout <= timeout else {
+            throw ClientError.invalidConfiguration("The owned proxy transaction deadline must be positive and bounded by its worker deadline.")
+        }
         let request = ProxyWorkerRequest(id: UUID().uuidString, updates: updates)
         let payload = try JSONEncoder().encode(request)
         guard !payload.isEmpty, payload.count <= Self.maximumFrame else { throw ClientError.invalidConfiguration("The proxy transaction is too large.") }
         do {
             try startIfNeeded()
             guard let input, let output else { throw failure("The owned proxy worker did not start.") }
-            let deadline = ProcessInfo.processInfo.systemUptime + timeout
+            let deadline = ProcessInfo.processInfo.systemUptime + transactionTimeout
             var count = UInt32(payload.count).bigEndian
             var frame = withUnsafeBytes(of: &count) { Data($0) }; frame.append(payload)
             try write(frame, to: input.fileDescriptor, until: deadline)
