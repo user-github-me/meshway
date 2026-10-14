@@ -1,0 +1,27 @@
+name: Bug report
+description: Report reproducible behavior without keys, tokens or private traffic.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: "Never include recovery keys, API tokens, private state or personal traffic. Security vulnerabilities belong in private reporting."
+  - type: input
+    id: version
+    attributes:
+      label: Meshway version and platform
+      placeholder: "0.1.0-alpha.1, Android 15 / Windows 11 / Ubuntu 24.04"
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Include expected and actual behavior and a sanitized network topology.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Sanitized evidence
+      description: Remove tokens, account backups, IPs you do not want public and personal traffic.

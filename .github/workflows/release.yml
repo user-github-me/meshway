@@ -38,7 +38,27 @@ jobs:
       - run: npm ci
       - run: go test -race ./... -count=1 -timeout=180s
       - run: npm test
-      - run: ./scripts/release.sh
+      - run: npm run build
+      - name: Package cores and extensions
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: MESHWAY_RELEASE_VERSION="${RELEASE_TAG#v}" ./scripts/release.sh
+      - uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+      - name: Package Linux installers
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          version="${RELEASE_TAG#v}"
+          python3 scripts/package-linux.py --binary dist/bin/meshway-linux-amd64 --version "$version" --arch amd64
+          python3 scripts/package-linux.py --binary dist/bin/meshway-linux-arm64 --version "$version" --arch arm64
+          docker pull alpine:3.23
+          rpm_version="${version%%-*}"
+          rpm_release=1
+          if [ "$version" != "$rpm_version" ]; then rpm_release="0.${version#*-}"; fi
+          ./scripts/package-linux-lab.sh alpine:3.23 dist/bin/meshway-linux-amd64 "$rpm_version" x86_64 "$rpm_release"
+          ./scripts/package-linux-lab.sh alpine:3.23 dist/bin/meshway-linux-arm64 "$rpm_version" aarch64 "$rpm_release"
       - name: Package reviewed source
         run: npm pack --workspace @meshway/cli --pack-destination release
       - name: Sign and independently verify artifacts

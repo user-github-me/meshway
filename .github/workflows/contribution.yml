@@ -1,0 +1,32 @@
+name: contribution-policy
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  formatting:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.2'
+      - name: Check Go formatting
+        shell: bash
+        run: |
+          git ls-files -z '*.go' | xargs -0 gofmt -l > /tmp/meshway-unformatted
+          if [ -s /tmp/meshway-unformatted ]; then
+            cat /tmp/meshway-unformatted
+            echo 'Format these files with gofmt before contributing.'
+            exit 1
+          fi
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: never

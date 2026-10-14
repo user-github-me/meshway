@@ -1,0 +1,3 @@
+# Maintainers review all contributions; security, release and CI changes require
+# a code-owner review under the protected main branch.
+* @user-github-me

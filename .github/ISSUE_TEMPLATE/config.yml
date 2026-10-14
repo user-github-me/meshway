@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability privately
+    url: https://github.com/user-github-me/meshway/security/advisories/new
+    about: Do not disclose vulnerabilities or credentials in public issues.
+  - name: Contribution and development guide
+    url: https://github.com/user-github-me/meshway/blob/main/CONTRIBUTING.md
+    about: Read the rules and validation requirements before proposing changes.

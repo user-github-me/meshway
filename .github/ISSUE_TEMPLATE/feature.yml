@@ -1,0 +1,19 @@
+name: Feature proposal
+description: Propose a concrete improvement before starting a large change.
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: User problem
+      description: Who is affected and what are they trying to do?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior and tradeoffs
+      description: Explain consent, security, privacy and platform effects where relevant.
+    validations:
+      required: true
