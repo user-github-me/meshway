@@ -53,10 +53,19 @@
   "npm_publication": "Registry session expired; npm whoami returned401. Alpha2 registry publication pending fresh owner login.",
   "live_personal_gui_replacement": "pending older app proxy restoration",
   "public_github_cli_validation": {
-    "signed_metadata_and_cli_tarball_verified": true,
-    "core_download_complete": false,
-    "cache_tamper_check_complete": false,
-    "failure": "Bounded bulk download through existing SOCKS timed out; temporary test packages removed."
+    "status": "PASS",
+    "ordinary_node_https_default_install": true,
+    "correct_core_version": true,
+    "signed_core_and_licenses_verified": true,
+    "cache_tamper_rejected_before_execution": true,
+    "temporary_files_removed": true,
+    "validation_host": "existing owned Azure relay",
+    "relay_baseline_preserved": true,
+    "evidence": "artifacts/published-install-alpha2-validation.json",
+    "china_mac_bulk_download_attempts": "Incomplete: bounded downloads stalled and final fixture watchdog expired. This is separate from the successful ordinary HTTPS Azure installation."
   },
-  "production_baseline_preserved_after_publication": true
+  "production_baseline_preserved_after_publication": true,
+  "website_alpha2_downloads_and_logo_verified": true,
+  "latest_website_ci_run": 38638816954,
+  "latest_website_all_eight_ci_jobs_passed": true
 }
