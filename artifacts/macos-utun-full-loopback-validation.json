@@ -118,5 +118,112 @@
         "reply": true
       }
     ]
+  },
+  "final_cleanup_validation": {
+    "workflow_run_id": 38630817901,
+    "status": "PASS",
+    "scope": "full privileged production helper on disposable hosted Mac with loopback encrypted peers/mock DNS",
+    "development_host_modified": false,
+    "checks": {
+      "full_helper_verified_setup": true,
+      "ipv4_virtual_dns_route": true,
+      "ipv6_virtual_dns_route": true,
+      "full_helper_unbound_udp_dns_reply": true,
+      "concurrent_ipv4_ipv6_dns_replies": true,
+      "native_resolver_completed": true,
+      "native_resolver_encrypted_traffic": true,
+      "baseline_restored": true
+    },
+    "binary_sha256": "fc2414b5887f3468cffdffca71e6da85d3cd10035d6038fd29be499bb296d6f2",
+    "source_commit": "7bb531fd62c180fc712537b38e94fec66e8c1c2c",
+    "cycles": [
+      {
+        "mode": "explicit-stop",
+        "journal_inactive": true,
+        "packet_session_inactive": true,
+        "stop_accepted": true,
+        "baseline_restored": true,
+        "native_dns_encrypted_traffic": true,
+        "concurrent_ipv4_ipv6_dns_replies": true
+      },
+      {
+        "mode": "owner-process-exit",
+        "automatic_parent_exit_cleanup": true,
+        "journal_inactive": true,
+        "packet_session_inactive": true,
+        "stop_accepted": true,
+        "baseline_restored": true,
+        "native_dns_encrypted_traffic": true,
+        "concurrent_ipv4_ipv6_dns_replies": true
+      },
+      {
+        "mode": "helper-sigkill-explicit-recovery",
+        "journal_inactive": true,
+        "packet_session_inactive": true,
+        "stop_accepted": true,
+        "baseline_restored": true,
+        "native_dns_encrypted_traffic": true,
+        "concurrent_ipv4_ipv6_dns_replies": true
+      }
+    ],
+    "packet_counters": {
+      "sent_delta": 57,
+      "received_delta": 57
+    },
+    "server_packet_counters": {
+      "sent_delta": 57,
+      "received_delta": 57
+    },
+    "mock_dns_queries_received": 56,
+    "concurrent_dns": [
+      {
+        "family": 6,
+        "reply": true
+      },
+      {
+        "family": 4,
+        "reply": true
+      },
+      {
+        "family": 4,
+        "reply": true
+      },
+      {
+        "family": 6,
+        "reply": true
+      },
+      {
+        "family": 6,
+        "reply": true
+      },
+      {
+        "family": 4,
+        "reply": true
+      },
+      {
+        "family": 4,
+        "reply": true
+      },
+      {
+        "family": 6,
+        "reply": true
+      },
+      {
+        "family": 6,
+        "reply": true
+      },
+      {
+        "family": 4,
+        "reply": true
+      },
+      {
+        "family": 6,
+        "reply": true
+      },
+      {
+        "family": 4,
+        "reply": true
+      }
+    ]
   }
 }

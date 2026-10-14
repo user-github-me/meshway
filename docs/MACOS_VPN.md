@@ -5,16 +5,30 @@ user-owned Meshway daemon. It uses the same authenticated personal-server exit
 as SOCKS mode. This separate helper does not require an Apple Developer account;
 Apple Network Extension distribution remains a separately signed option.
 
-The helper is undergoing integration and runtime qualification. Fake-backend
-and socket tests establish specific cleanup and packet-I/O behavior. They do
-not establish actual macOS routing, resolver selection, sleep/wake behavior or
-recovery on a physical machine. Do not interpret a successful build as a passed
-device VPN test. The first disposable hosted runs installed and verified owned
-IPv4/IPv6 capture routes and virtual DNS entries, but native DNS and controlled
-UDP response checks failed. Cleanup restored the original routes, DNS and proxy;
-the temporary Azure exit was deleted. These partial results are recorded in
-[macos-utun-runtime-partial.json](../artifacts/macos-utun-runtime-partial.json)
-and do not qualify full-device VPN operation.
+The administrator helper passed actual kernel tests on disposable GitHub-hosted
+macOS runners. Public-exit [run38629280142](https://github.com/user-github-me/meshway/actions/runs/38629280142)
+at `5b7d544` exercised native DNS, the expected exit IP and certificate-verified
+public HTTPS through the owned interface in three cycles: explicit Stop,
+automatic parent-exit cleanup, and SIGKILL followed by scoped recovery. Every
+cycle restored the original routes, DNS and proxy and closed the daemon packet
+session. The temporary Azure resource group was deleted and its test credentials
+removed; [public evidence](../artifacts/macos-utun-public-validation.json) records
+both confirmations and the exact binary hashes.
+
+The final conservative route-absence checks then passed actual full-helper
+[run38630817901](https://github.com/user-github-me/meshway/actions/runs/38630817901)
+at `7bb531f` with all three cleanup modes and twelve simultaneous IPv4/IPv6 DNS
+queries per cycle; [kernel evidence](../artifacts/macos-utun-full-loopback-validation.json)
+records the result. Earlier failed DNS tests remain in
+[partial evidence](../artifacts/macos-utun-runtime-partial.json). Their cause was
+a temporary physical route clone being mistaken for a persistent server bypass.
+The helper now preserves a durable bypass and checks the effective physical
+route after installing capture routes.
+
+These results qualify the tested administrator helper. Physical hardware,
+sleep/wake, native authorization UI and signed Network Extension behavior remain
+separate checks. The public exit fixture used IPv4; IPv6 kernel capture and DNS
+were tested, and public IPv6 egress requires a dual-stack exit.
 
 ## Ownership and setup
 
@@ -80,9 +94,11 @@ addition or an interface name alone is never evidence of ownership.
 While the helper runs, a peer outage retains packet capture and drops traffic
 until the encrypted session reconnects. There is no persistent macOS firewall
 kill switch in this helper. A crash can close the interface and restore direct
-routing; resolver and route recovery require separate crash qualification.
+routing. SIGKILL followed by explicit scoped Stop restored resolver and route
+state in the disposable tests; it does not establish uninterrupted crash
+containment.
 The app must not promise leak protection across helper crashes, restart,
-sleep/wake or unrelated networking changes until those cases are tested.
+sleep/wake or unrelated networking changes.
 
 ## Safe local checks
 
