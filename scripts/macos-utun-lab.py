@@ -148,6 +148,10 @@ def execute(args):
                 proof['helper_diagnostic']={'phase':phase,'exit_code':helper.poll(),'last_cli_error':safe_helper_failure(pathlib.Path(helper_log.name))}
                 raise RuntimeError('Actual utun helper did not confirm setup; bounded CLI diagnostic recorded.')
             cycle={'mode':mode,'utun_active':True}
+            transport_route=run(['/sbin/route','-n','get',exit_ip]).stdout
+            transport_interface=re.search(r'(?m)^\s*interface:\s*([A-Za-z0-9]+)\s*$',transport_route)
+            cycle['transport_underlay_route']={'interface':transport_interface.group(1) if transport_interface else None,'bypasses_owned_utun':bool(transport_interface and transport_interface.group(1)!=device and not transport_interface.group(1).startswith('utun'))}
+            if not cycle['transport_underlay_route']['bypasses_owned_utun']:raise RuntimeError('Encrypted peer underlay no longer bypasses packet capture.')
             phase=mode+':ipv4-route'
             route=run(['/sbin/route','-n','get','1.1.1.1']).stdout
             if f'interface: {device}' not in route:
@@ -185,6 +189,7 @@ def execute(args):
             except subprocess.TimeoutExpired:
                 after_timeout=api('/v1/status')
                 cycle['native_dns_packet_counters_after_timeout']={key:after_timeout.get(key,0) for key in ['bytes_sent','bytes_received']}
+                cycle['transport_after_dns_timeout']={'upstream_connected':after_timeout.get('upstream_connected'),'vpn_active':after_timeout.get('vpn',{}).get('active'),'vpn_error':str(after_timeout.get('vpn',{}).get('error',''))[:256]}
                 # A separate fixed public A query to the virtual IPv4 resolver
                 # isolates resolver selection from actual captured UDP I/O.
                 probe=run([sys.executable,'-c','import socket,struct,json\ns=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.settimeout(5)\nq=struct.pack("!HHHHHH",18723,256,1,0,0,0)+b"\\x07example\\x03com\\x00"+struct.pack("!HH",1,1)\ntry:\n s.sendto(q,("10.77.0.1",53));a,_=s.recvfrom(4096);h=struct.unpack("!HHHHHH",a[:12]);print(json.dumps({"reply":h[0]==18723,"rcode":h[1]&15,"answers":h[3]}))\nexcept OSError: print(json.dumps({"reply":False}))\nfinally:s.close()'],timeout=8,check=False)
