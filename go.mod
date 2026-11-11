@@ -6,9 +6,10 @@ require (
 	github.com/libp2p/go-libp2p v0.50.0
 	github.com/multiformats/go-multiaddr v0.16.1
 	github.com/sagernet/gvisor v0.0.0-20260727.0-sing-box-mod.3
-	golang.org/x/net v0.61.0
-	golang.org/x/sys v0.49.0
-	golang.org/x/time v0.15.0
+	golang.org/x/crypto v0.58.0
+	golang.org/x/net v0.62.0
+	golang.org/x/sys v0.50.0
+	golang.org/x/time v0.16.0
 	golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2
 )
 
@@ -86,7 +87,6 @@ require (
 	go.uber.org/mock v0.6.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.28.0 // indirect
-	golang.org/x/crypto v0.58.0 // indirect
 	golang.org/x/exp v0.0.0-20260718201538-764159d718ef // indirect
 	golang.org/x/mobile v0.0.0-20261011034528-197770444867 // indirect
 	golang.org/x/mod v0.42.0 // indirect
