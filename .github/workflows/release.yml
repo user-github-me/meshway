@@ -25,14 +25,14 @@ jobs:
     runs-on: ubuntu-latest
     environment: release
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag }}
           fetch-depth: 0
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: '1.27.2'
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
       - run: npm ci
@@ -44,7 +44,7 @@ jobs:
         env:
           RELEASE_TAG: ${{ inputs.tag }}
         run: MESHWAY_RELEASE_VERSION="${RELEASE_TAG#v}" ./scripts/release.sh
-      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-qemu-action@v4
         with:
           platforms: arm64
       - name: Package Linux installers
