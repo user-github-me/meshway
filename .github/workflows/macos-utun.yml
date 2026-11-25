@@ -23,10 +23,10 @@ jobs:
     env:
       MESHWAY_DISPOSABLE_MACOS_VM: '1'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref }}
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: '1.27.2'
       - name: Build and publish only the temporary client public peer ID
@@ -34,7 +34,7 @@ jobs:
           mkdir -p .tools/macos-utun-lab
           go build -buildvcs=false -trimpath -ldflags='-s -w' -o .tools/macos-utun-lab/meshway ./cmd/meshway
           python3 scripts/macos-utun-lab.py --prepare
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: macos-utun-client-peer
           path: .tools/macos-utun-lab/client-peer.json
@@ -52,7 +52,7 @@ jobs:
           if [ -x .tools/macos-utun-lab/meshway ]; then
             sudo -n .tools/macos-utun-lab/meshway vpn stop --config "$PWD/.tools/macos-utun-lab/config.json" || true
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: macos-utun-runtime-proof
